@@ -11,8 +11,8 @@ const canvas = document.querySelector('.myCanvas');
 const ctx = canvas.getContext('2d');
 
 // display options
-const width = canvas.width = 320;
-const height = canvas.height = 320;
+const width = canvas.width = 640;
+const height = canvas.height = 640;
 const CELL_MARGIN = 1; // cell margin
 const CELL_LEN = height/NUM_ROWS;  // cell sidelength, breaks if canvas is not square
 const LIVE_COLOUR = 'rgb(200, 200, 200)'
