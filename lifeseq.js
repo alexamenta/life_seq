@@ -2,94 +2,47 @@ Number.prototype.mod = function(n) {
     return ((this%n)+n)%n;
     }
 
+// grid options
 const NUM_ROWS = 32;
 const NUM_COLS = 32;
 
+// display setup 
 const canvas = document.querySelector('.myCanvas');
-const width = canvas.width = 320;
-const height = canvas.height = 320;
 const ctx = canvas.getContext('2d');
 
-ctx.fillStyle = 'rgba(255,255,255,0.05)';
-ctx.fillRect(0, 0, width, height);
-
-const eps = 1;
-
-const len = height/NUM_ROWS;  // breaks if not square!
-
+// display options
+const width = canvas.width = 320;
+const height = canvas.height = 320;
+const CELL_MARGIN = 1; // cell margin
+const CELL_LEN = height/NUM_ROWS;  // cell sidelength, breaks if canvas is not square
 const LIVE_COLOUR = 'rgb(200, 200, 200)'
 const DEAD_COLOUR = 'rgb(20, 20, 20)'
 
+// create background
+ctx.fillStyle = 'rgba(255,255,255,0.05)';
+ctx.fillRect(0, 0, width, height);
 
-function Board(rows, cols) {
+// board constructor: random board with probability p of life.
+// set p=0 (default) for empty board
+function Board(rows, cols, p=0) {
     this.rows = rows;
     this.cols = cols;
     this.cells = [];
     for (let x=0; x<rows; x++) {
         this.cells.push([]); // create row
         for (let y=0; y<cols; y++) {
-            this.cells[x].push(undefined);
-        }
-    }
-}
-
-function step(board) {
-    let r = board.rows;
-    let c = board.cols;
-    let new_brd = emptyBoard(r,c);
-
-    console.log("trying to step")
-
-    for (let x=0; x<r; x++) {
-        for (let y=0; y<c; y++) {
-            console.log("checking the point with coords [" + x + ", " + y + "]");
-            // count number of live neighbours
-            let live_neighbours = 0;
-            for (let dx = -1; dx <= 1; dx++) {
-                for (let dy = -1; dy <= 1; dy++) {
-                    if (dx != 0 || dy != 0) {
-                        // console.log([x+dx, y+dy]);
-                        // console.log([(x + dx).mod(r), (y + dy).mod(c)]);
-                        nbr_status = board.cells[(x + dx).mod(r)][(y + dy).mod(c)];
-                        live_neighbours += Number(nbr_status);
-                    }
-                }
-            }
-
-            // live cells need 2 or 3 live neighbours to live
-            if (board.cells[x][y]) {
-                new_brd.cells[x][y] = (live_neighbours == 2 || live_neighbours == 3);
+            if (p==0) {
+                this.cells[x].push(false);
             } else {
-                new_brd.cells[x][y] = (live_neighbours == 3);
+                this.cells[x].push((Math.random() < p));
             }
         }
     }
-
-    return new_brd;
 }
 
-function emptyBoard(rows, cols) {
-    let board = new Board(rows, cols);
-    for (let x=0; x<rows; x++) {
-        for (let y=0; y<cols; y++) {
-            board.cells[x][y] = false;
-        }
-    }
-    return board;
-}
-
-function randomBoard(rows, cols) {
-    let board = new Board(rows, cols);
-    for (let x=0; x<rows; x++) {
-        for (let y=0; y<cols; y++) {
-            board.cells[x][y] = (Math.random() < 0.5);
-        }
-    }
-    return board;
-}
-
+// initialise a glider
 function gliderBoard(rows, cols) {
-    let board = new emptyBoard(rows, cols);
+    let board = new Board(rows, cols);
     board.cells[0][1] = true;
     board.cells[1][0] = true;
     board.cells[2][0] = true;
@@ -98,14 +51,47 @@ function gliderBoard(rows, cols) {
     return board;
 }
 
+// apply Conway's life rule to the board
+// and return the new board
+// (does not mutate brd)
+function step(brd) {
+    let r = brd.rows;
+    let c = brd.cols;
+    let new_brd = new Board(r,c);
 
-function draw(board) {
-    for (let r=0; r < board.rows; r++) {
-        for (let c=0; c < board.cols; c++) {
-            let topleft = [c*len + eps, r*len + eps];
-            let widthheight = [len-2*eps, len-2*eps];
+    for (let x=0; x<r; x++) {
+        for (let y=0; y<c; y++) {
+            // count number of live neighbours
+            let live_nbrs = 0;
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    if (dx != 0 || dy != 0) {
+                        nbr_status = brd.cells[(x + dx).mod(r)][(y + dy).mod(c)];
+                        live_nbrs += Number(nbr_status);
+                    }
+                }
+            }
+
+            // live cells need 2 or 3 live neighbours to live
+            if (brd.cells[x][y]) {
+                new_brd.cells[x][y] = (live_nbrs == 2 || live_nbrs == 3);
+            } else {
+                new_brd.cells[x][y] = (live_nbrs == 3);
+            }
+        }
+    }
+
+    return new_brd;
+}
+
+// draw a board
+function draw(brd) {
+    for (let r=0; r < brd.rows; r++) {
+        for (let c=0; c < brd.cols; c++) {
+            let topleft = [c*CELL_LEN + CELL_MARGIN, r*CELL_LEN + CELL_MARGIN];
+            let widthheight = [CELL_LEN-2*CELL_MARGIN, CELL_LEN-2*CELL_MARGIN];
     
-            if (board.cells[r][c]) {
+            if (brd.cells[r][c]) {
                 ctx.fillStyle = LIVE_COLOUR;
             } else {
                 ctx.fillStyle = DEAD_COLOUR;
@@ -116,13 +102,15 @@ function draw(board) {
     }
 }
 
-function globalStep() {
+// initialise a board and draw it
+let brd = new Board(NUM_ROWS, NUM_COLS, p=0.15);
+draw(brd);
+
+// update the drawn board
+function updateDisplayedBrd() {
     brd = step(brd);
     draw(brd);
 }
 
-var brd = randomBoard(NUM_ROWS, NUM_COLS);
-draw(brd);
-
-
-canvas.addEventListener('click', globalStep);
+// step when user clicks the canvas
+canvas.addEventListener('click', updateDisplayedBrd);
