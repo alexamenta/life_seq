@@ -24,7 +24,8 @@ ctx.fillRect(0, 0, width, height);
 
 // board constructor: random board with probability p of life.
 // set p=0 (default) for empty board
-function Board(rows, cols, p=0) {
+// defaults to 16x16
+function Board(rows=16, cols=16, p=0) {
     this.rows = rows;
     this.cols = cols;
     this.cells = [];
@@ -41,7 +42,9 @@ function Board(rows, cols, p=0) {
 }
 
 // initialise a glider
-function gliderBoard(rows, cols) {
+// defaults to 16x16 board
+// should have rows, cols >= 2
+function gliderBoard(rows=16, cols=16) {
     let board = new Board(rows, cols);
     board.cells[0][1] = true;
     board.cells[1][0] = true;
@@ -102,14 +105,87 @@ function draw(brd) {
     }
 }
 
+
+// audio stuff
+// following https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Using_Web_Audio_API
+const AudioContext = window.AudioContext || window.webkitAudioContext;
+const audioCtx = new AudioContext();
+
+// gain node, to adjust volume
+const gainNode = audioCtx.createGain();
+gainNode.gain.value = 0.05;
+gainNode.connect(audioCtx.destination);
+const volumeControl = document.querySelector('#volume');
+volumeControl.addEventListener('input', function() {
+    gainNode.gain.value = this.value;
+}, false);
+
+// create an oscillator node for each cell
+let osc_nodes = [];
+for (let x = 0; x < NUM_ROWS; x++) {
+    osc_nodes.push([]);
+    for (let y = 0; y < NUM_COLS; y++) {
+        const osc = audioCtx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(10 + 100*x + 100*y, audioCtx.currentTime);
+        osc.connect(gainNode);
+        osc_nodes[x].push(osc);
+    }
+}
+
+// frequency data
+function noteToFreq(note) {
+    let a = 440;
+    return (a / 32) * (2 ** ((note - 9) / 12));
+}
+
+// create an oscillator with given frequency
+// and return it (for later closing)
+function playosc(note) {
+    let osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(noteToFreq(note), audioCtx.currentTime);
+    osc.connect(gainNode);
+    osc.start()
+    return osc;
+}
+
+// 'play' the board
+// return list of running oscillators
+function play(brd, running_oscs=[]) {
+    // stop all running oscillators and empty the list
+    if (running_oscs) {
+        for (let i = 0; i < running_oscs.length; i++) {
+            running_oscs[i].stop();
+        }
+        running_oscs = [];
+    }
+    for (let r=0; r < brd.rows; r++) {
+        for (let c=0; c < brd.cols; c++) {
+    
+            if (brd.cells[r][c]) {
+                let newosc = playosc(50+c-r);
+                running_oscs.push(newosc);
+            }
+        }
+    }
+    return running_oscs;
+}
+
+
+
 // initialise a board and draw it
 let brd = new Board(NUM_ROWS, NUM_COLS, p=0.15);
+// let brd = gliderBoard(NUM_ROWS, NUM_COLS);
+let running_oscs = [];
 draw(brd);
+running_oscs = play(brd);
 
 // update the drawn board
 function updateDisplayedBrd() {
     brd = step(brd);
     draw(brd);
+    running_oscs = play(brd, running_oscs);
 }
 
 // step when user clicks the canvas

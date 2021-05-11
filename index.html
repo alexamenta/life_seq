@@ -14,21 +14,6 @@
                 top: 0%;
                 left: 0%;
             }
-            #tick {
-                width: 8px;
-                height: 8px;
-                animation-name: blink;
-                animation-duration: 1s;
-                animation-iteration-count: infinite;
-            }
-            @keyframes blink {
-                0% {background-color: #FFFFFF;}
-                20% {background-color: #000000;}
-            }
-            footer {
-                position: absolute;
-                bottom: 0;
-            }
         </style>
 
         <title>lifeseq</title>
@@ -39,9 +24,11 @@
             <canvas class="myCanvas">
                 <p>(text shown if canvas not supported)</p>
             </canvas>
+            <input type="range" id="volume" min="0" max="0.08" value="0.05" step="0.01">
         </mainbox>  
     </body>
 
     <script src="lifeseq.js"></script>
+
 
 </html>
