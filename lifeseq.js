@@ -3,34 +3,57 @@ Number.prototype.mod = function(n) {
     }
 
 // grid options
-const NUM_ROWS = 16;
-const NUM_COLS = 16;
-
-// display setup 
-const canvas = document.querySelector('.myCanvas');
-const ctx = canvas.getContext('2d');
+const NUM_ROWS = 20;
+const NUM_COLS = 20;
 
 // display options
-const width = canvas.width = 640;
-const height = canvas.height = 640;
-const CELL_MARGIN = 1; // cell margin
-const CELL_LEN = height/NUM_ROWS;  // cell sidelength, breaks if canvas is not square
 const LIVE_COLOUR = 'rgb(200, 200, 200)'
 const DEAD_COLOUR = 'rgb(20, 20, 20)'
 
-// create background
-ctx.fillStyle = 'rgba(255,255,255,0.05)';
-ctx.fillRect(0, 0, width, height);
+// audio options
+const VOL_RAMP_TIME = 0.1;
+const FREQ_RAMP_TIME = 0.1;
 
 // cell constructor
-function Cell(div_id=undefined, alive=false) {
+function Cell(id=undefined, alive=false) {
     this.alive = alive;
-    this.div_id = div_id; // id of div used to display cell
+    this.id = id; // id of div used to display cell
+
+    this.draw = function() {
+        if (this.id) {
+            let colour = (this.alive ? LIVE_COLOUR : DEAD_COLOUR);
+            document.getElementById(this.id).style.backgroundColor = colour;
+        } else {
+            console.log("Tried to draw cell with undefined id");
+        }
+    }
+
+    // scope issues prevent that.draw() from working
+    var that = this;
+
+    this.toggle = function() {
+        that.alive = !that.alive;
+        that.draw();
+    }
+
 }
 
 // cell id generator for HTML elements
 function cellId(x,y) {
     return "cell:" + x + "," + y;
+}
+
+// generate grid of html-element cells
+// in the element with given id
+function generateCellGrid(rows=16, cols=16, id) {
+    for (let x=0; x < rows; x++) {
+        for (let y=0; y < cols; y++) {
+        let cell = document.createElement("div");
+        cell.className = "cell";
+        cell.id = cellId(x,y);
+        document.getElementById("seq-area").appendChild(cell);
+        }
+    }
 }
 
 // board constructor: random board with probability p of life.
@@ -41,15 +64,11 @@ function Board(rows=16, cols=16, p=0) {
     this.cols = cols;
     this.cells = [];
     for (let x=0; x<rows; x++) {
-        this.cells.push([]); // create row
+        this.cells.push([]); 
         for (let y=0; y<cols; y++) {
-            if (p==0) {
-                let cell = new Cell(cellId(x,y), false)
-                this.cells[x].push(cell);
-            } else {
-                let cell = new Cell(cellId(x,y), Math.random() < p)
-                this.cells[x].push(cell);
-            }
+            let cell = new Cell(cellId(x,y), Math.random() < p);
+            this.cells[x].push(cell);
+            document.getElementById(cell.id).addEventListener('click', cell.toggle);
         }
     }
 }
@@ -74,6 +93,7 @@ function step(brd) {
     let r = brd.rows;
     let c = brd.cols;
     let new_brd = new Board(r,c);
+    let changed = []; // indices for which the value has changed
 
     for (let x=0; x<r; x++) {
         for (let y=0; y<c; y++) {
@@ -94,110 +114,155 @@ function step(brd) {
             } else {
                 new_brd.cells[x][y].alive = (live_nbrs == 3);
             }
+
+            // track whether the cell has changed
+            if (new_brd.cells[x][y].alive != brd.cells[x][y].alive) {
+                changed.push([x,y]);
+            } 
         }
     }
 
-    return new_brd;
+    return [new_brd, changed];
 }
 
-// draw a board
+// draw given board to HTML (assumes all the cell IDs are assigned right)
 function draw(brd) {
-    for (let r=0; r < brd.rows; r++) {
-        for (let c=0; c < brd.cols; c++) {
-            let topleft = [c*CELL_LEN + CELL_MARGIN, r*CELL_LEN + CELL_MARGIN];
-            let widthheight = [CELL_LEN-2*CELL_MARGIN, CELL_LEN-2*CELL_MARGIN];
-    
-            if (brd.cells[r][c].alive) {
-                ctx.fillStyle = LIVE_COLOUR;
-            } else {
-                ctx.fillStyle = DEAD_COLOUR;
-            }
-
-            ctx.fillRect(...topleft, ...widthheight);
+    for (let x=0; x < brd.rows; x++) {
+        for (let y=0; y < brd.cols; y++) {
+            brd.cells[x][y].draw();
         }
     }
 }
 
-
-// audio stuff
-const AudioContext = window.AudioContext || window.webkitAudioContext;
-const audioCtx = new AudioContext();
-
-// gain node, to adjust volume
-const gainNode = audioCtx.createGain();
-gainNode.gain.value = 0.05;
-gainNode.connect(audioCtx.destination);
-const volumeControl = document.querySelector('#volume');
-volumeControl.addEventListener('input', function() {
-    gainNode.gain.value = this.value;
-}, false);
-
-// create an oscillator node for each cell
-let osc_nodes = [];
-for (let x = 0; x < NUM_ROWS; x++) {
-    osc_nodes.push([]);
-    for (let y = 0; y < NUM_COLS; y++) {
-        const osc = audioCtx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(10 + 100*x + 100*y, audioCtx.currentTime);
-        osc.connect(gainNode);
-        osc_nodes[x].push(osc);
-    }
-}
 
 // frequency data
 function noteToFreq(note) {
-    let a = 440;
-    return (a / 32) * (2 ** ((note - 9) / 12));
+    let a = 110;
+    return (a / 32) * (2 ** (note/ 12));
 }
 
-// create an oscillator with given frequency
-// and return it (for later closing)
-function playosc(note) {
-    let osc = audioCtx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(noteToFreq(note), audioCtx.currentTime);
-    osc.connect(gainNode);
-    osc.start()
-    return osc;
+// generates oscillator and gain node matrices
+// frequencies all set to 440 by default
+// gains all set to 0 by default
+// these will be changed later in the program
+function generateOscsAndGains(rows, cols, globalGainNode, audioCtx) {
+    let oscs = [];
+    let gains = [];
+    for (let x=0; x < rows; x++) {
+        oscs.push([]);
+        gains.push([]);
+        for (let y=0; y < cols; y++) {
+            let newOsc = audioCtx.createOscillator();
+            oscs[x].push(newOsc);
+
+            let newGainNode = audioCtx.createGain();
+            newGainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+            gains[x].push(newGainNode)
+            newGainNode.connect(globalGainNode);
+            newOsc.connect(newGainNode);
+            newOsc.start();
+        }
+    }
+    return [oscs, gains];
+}
+
+// given doubly-indexed arrays of oscillators and frequencies (of the same shape)
+// ramp the frequencies to the new values
+function setAllFrequencies(oscs, freqs, audioCtx) {
+    for (x = 0; x < oscs.length; x++) {
+        for (y = 0; y < oscs[x].length; y++) {
+            oscs[x][y].frequency.exponentialRampToValueAtTime(freqs[x][y], audioCtx.currentTime + FREQ_RAMP_TIME);
+        }
+    }
+}
+
+// generate the matrix of frequencies
+// this is just an ad-hoc definition, can be changed
+function freqMatrixGenerator(num_rows, num_cols, multiplier, rootNote) {
+    let freqs = [];
+    for (x = 0; x < num_rows; x++) {
+        freqs.push([]);
+        for (y = 0; y < num_cols; y++) {
+            freqs[x].push(noteToFreq(rootNote) + multiplier*(3*x*NUM_ROWS + 2*y));
+        }
+    }
+    return freqs;
 }
 
 // 'play' the board
-// return list of running oscillators
-function play(brd, running_oscs=[]) {
-    // stop all running oscillators and empty the list
-    if (running_oscs) {
-        for (let i = 0; i < running_oscs.length; i++) {
-            running_oscs[i].stop();
-        }
-        running_oscs = [];
+// this just adjusts gains for each step
+function play(brd, gains, changed, audioCtx) {
+    for (let i = 0; i < changed.length; i++) {
+        // index of a cell whose state has changed
+        let x = changed[i][0];
+        let y = changed[i][1];
+        let new_vol = Number(brd.cells[x][y].alive);
+        gains[x][y].gain.linearRampToValueAtTime(new_vol, audioCtx.currentTime + VOL_RAMP_TIME);
+        // gains[x][y].gain.value = new_vol;
     }
-    for (let r=0; r < brd.rows; r++) {
-        for (let c=0; c < brd.cols; c++) {
-    
-            if (brd.cells[r][c].alive) {
-                let newosc = playosc(60+c-r);
-                running_oscs.push(newosc);
-            }
-        }
-    }
-    return running_oscs;
 }
 
+const rootNoteControl = document.querySelector('#rootnote');
+const multiplierControl = document.querySelector('#multiplier');
+const speedControl = document.querySelector('#speed')
 
-async function run() {
+async function run(gainNode, audioCtx) {
     // initialise a board and draw it
-    //let brd = new Board(NUM_ROWS, NUM_COLS, p=0.08);
-    let brd = gliderBoard(NUM_ROWS, NUM_COLS);
-    let running_oscs = [];
+    let brd = new Board(NUM_ROWS, NUM_COLS, 0.2);
     draw(brd);
-    running_oscs = play(brd);
+    // set up oscillators and corresponding gains
+    let oscsAndGains = generateOscsAndGains(NUM_ROWS, NUM_COLS, gainNode, audioCtx)
+    let oscs = oscsAndGains[0];
+    let gains = oscsAndGains[1];
+    // get initial parameters
+    let old_rootnote = rootNoteControl.value/1;
+    let old_multiplier = multiplierControl.value/1;
+    let delay;
+    // form frequency matrix
+    freqs = freqMatrixGenerator(NUM_ROWS, NUM_COLS, old_multiplier, old_rootnote);
+    // set oscillator initial frequencies
+    setAllFrequencies(oscs, freqs, audioCtx);
+
+    // main loop
     while(true) {
-        await new Promise(r => setTimeout(r, 125));
-        brd = step(brd);
+
+        // get delay parameter, and wait
+        delay = 1/speedControl.value;
+        await new Promise(r => setTimeout(r, Math.floor(delay)));
+
+        // get tonal parameter values
+        let new_rootnote = rootNoteControl.value/1;
+        let new_multiplier = multiplierControl.value/1;
+
+        // change frequencies only if a tonal parameter has changed
+        if (new_rootnote != old_rootnote || new_multiplier != old_multiplier) {
+            freqs = freqMatrixGenerator(NUM_ROWS, NUM_COLS, new_multiplier, new_rootnote);
+            setAllFrequencies(oscs, freqs, audioCtx);
+            // replace old tonal parameters with new ones, if necessary
+            old_rootnote = new_rootnote;
+            old_multiplier = new_multiplier;
+        }
+
+        // update, play, and draw board
+        let stepdata = step(brd);
+        brd = stepdata[0];
+        changed = stepdata[1];
+        play(brd, gains, changed, audioCtx);        
         draw(brd);
-        running_oscs = play(brd, running_oscs);
     }
 }
 
-run();
+document.getElementById("start").addEventListener("click", function() {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+    // global gain node, to adjust volume
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.value = 0.05;
+    gainNode.connect(audioCtx.destination);
+    const volumeControl = document.querySelector('#volume');
+    volumeControl.addEventListener('input', function() {
+    gainNode.gain.value = this.value;
+    }, false);
+    generateCellGrid(NUM_ROWS, NUM_COLS);
+    run(gainNode, audioCtx);
+}); 

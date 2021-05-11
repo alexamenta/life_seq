@@ -16,8 +16,8 @@
             }
             .container {
                 display: grid;
-                grid-template-columns: repeat(32, 10px);
-                grid-template-rows: repeat(32, 10px);
+                grid-template-columns: repeat(20, 10px);
+                grid-template-rows: repeat(20, 10px);
             }
             .cell {
                 border-color: #AAAAAA;
@@ -30,6 +30,8 @@
     <body>
         <div class="container" id="seq-area">
         </div>
+        <label for="start">start</label>
+        <button id="start"></button>
         <label for="volume">vol</label>
         <input type="range" id="volume" min="0" max="0.08" value="0.05" step="0.005">
         <br>
