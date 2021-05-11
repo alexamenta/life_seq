@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {
+                font-family: monospace;
+                background: #000000;
+                color: #FFFFFF;
+            }
+            mainbox {
+                position: absolute;
+                top: 33%;
+                left: 33%;
+            }
+            #tick {
+                width: 8px;
+                height: 8px;
+                animation-name: blink;
+                animation-duration: 1s;
+                animation-iteration-count: infinite;
+            }
+            @keyframes blink {
+                0% {background-color: #FFFFFF;}
+                20% {background-color: #000000;}
+            }
+            footer {
+                position: absolute;
+                bottom: 0;
+            }
+        </style>
+
+        <title>lifeseq</title>
+    </head>
+
+    <body>
+        <mainbox>
+            <canvas class="myCanvas">
+                <p>(text shown if canvas not supported)</p>
+            </canvas>
+        </mainbox>  
+    </body>
+
+    <script src="lifeseq.js"></script>
+
+</html>
