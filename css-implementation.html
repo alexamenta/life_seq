@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {
+                font-family: monospace;
+                background: #000000;
+                color: #FFFFFF;
+            }
+            mainbox {
+                position: absolute;
+                top: 0%;
+                left: 0%;
+            }
+            .container {
+                display: grid;
+                grid-template-columns: repeat(32, 10px);
+                grid-template-rows: repeat(32, 10px);
+            }
+            .cell {
+                border-color: #AAAAAA;
+            }
+        </style>
+
+        <title>lifeseq</title>
+    </head>
+
+    <body>
+        <div class="container" id="seq-area">
+        </div>
+        <label for="volume">vol</label>
+        <input type="range" id="volume" min="0" max="0.08" value="0.05" step="0.005">
+        <br>
+        <label for="rootnote">root note</label>
+        <input type="range" id="rootnote" min="0" max="127" value="34" step="1">
+        <br>
+        <label for="multiplier">multiplier</label>
+        <input type="range" id="multiplier" min="0.01" max="2" value="1" step="0.001">
+        <br>
+        <label for="speed">speed</label>
+        <input type="range" id="speed" min="0.001" max="0.05" value="0.005" step="0.0001">
+    </body>
+
+    <script src="lifeseq-h.js"></script>
+
+
+</html>

@@ -3,8 +3,8 @@ Number.prototype.mod = function(n) {
     }
 
 // grid options
-const NUM_ROWS = 32;
-const NUM_COLS = 32;
+const NUM_ROWS = 16;
+const NUM_COLS = 16;
 
 // display setup 
 const canvas = document.querySelector('.myCanvas');
@@ -22,6 +22,17 @@ const DEAD_COLOUR = 'rgb(20, 20, 20)'
 ctx.fillStyle = 'rgba(255,255,255,0.05)';
 ctx.fillRect(0, 0, width, height);
 
+// cell constructor
+function Cell(div_id=undefined, alive=false) {
+    this.alive = alive;
+    this.div_id = div_id; // id of div used to display cell
+}
+
+// cell id generator for HTML elements
+function cellId(x,y) {
+    return "cell:" + x + "," + y;
+}
+
 // board constructor: random board with probability p of life.
 // set p=0 (default) for empty board
 // defaults to 16x16
@@ -33,9 +44,11 @@ function Board(rows=16, cols=16, p=0) {
         this.cells.push([]); // create row
         for (let y=0; y<cols; y++) {
             if (p==0) {
-                this.cells[x].push(false);
+                let cell = new Cell(cellId(x,y), false)
+                this.cells[x].push(cell);
             } else {
-                this.cells[x].push((Math.random() < p));
+                let cell = new Cell(cellId(x,y), Math.random() < p)
+                this.cells[x].push(cell);
             }
         }
     }
@@ -46,11 +59,11 @@ function Board(rows=16, cols=16, p=0) {
 // should have rows, cols >= 2
 function gliderBoard(rows=16, cols=16) {
     let board = new Board(rows, cols);
-    board.cells[0][1] = true;
-    board.cells[1][0] = true;
-    board.cells[2][0] = true;
-    board.cells[2][1] = true;
-    board.cells[2][2] = true;
+    board.cells[0][1].alive = true;
+    board.cells[1][0].alive = true;
+    board.cells[2][0].alive = true;
+    board.cells[2][1].alive = true;
+    board.cells[2][2].alive = true;
     return board;
 }
 
@@ -69,17 +82,17 @@ function step(brd) {
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dy = -1; dy <= 1; dy++) {
                     if (dx != 0 || dy != 0) {
-                        nbr_status = brd.cells[(x + dx).mod(r)][(y + dy).mod(c)];
+                        nbr_status = brd.cells[(x + dx).mod(r)][(y + dy).mod(c)].alive;
                         live_nbrs += Number(nbr_status);
                     }
                 }
             }
 
             // live cells need 2 or 3 live neighbours to live
-            if (brd.cells[x][y]) {
-                new_brd.cells[x][y] = (live_nbrs == 2 || live_nbrs == 3);
+            if (brd.cells[x][y].alive) {
+                new_brd.cells[x][y].alive = (live_nbrs == 2 || live_nbrs == 3);
             } else {
-                new_brd.cells[x][y] = (live_nbrs == 3);
+                new_brd.cells[x][y].alive = (live_nbrs == 3);
             }
         }
     }
@@ -94,7 +107,7 @@ function draw(brd) {
             let topleft = [c*CELL_LEN + CELL_MARGIN, r*CELL_LEN + CELL_MARGIN];
             let widthheight = [CELL_LEN-2*CELL_MARGIN, CELL_LEN-2*CELL_MARGIN];
     
-            if (brd.cells[r][c]) {
+            if (brd.cells[r][c].alive) {
                 ctx.fillStyle = LIVE_COLOUR;
             } else {
                 ctx.fillStyle = DEAD_COLOUR;
@@ -107,7 +120,6 @@ function draw(brd) {
 
 
 // audio stuff
-// following https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Using_Web_Audio_API
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 const audioCtx = new AudioContext();
 
@@ -163,7 +175,7 @@ function play(brd, running_oscs=[]) {
     for (let r=0; r < brd.rows; r++) {
         for (let c=0; c < brd.cols; c++) {
     
-            if (brd.cells[r][c]) {
+            if (brd.cells[r][c].alive) {
                 let newosc = playosc(60+c-r);
                 running_oscs.push(newosc);
             }
@@ -175,8 +187,8 @@ function play(brd, running_oscs=[]) {
 
 async function run() {
     // initialise a board and draw it
-    let brd = new Board(NUM_ROWS, NUM_COLS, p=0.08);
-    // let brd = gliderBoard(NUM_ROWS, NUM_COLS);
+    //let brd = new Board(NUM_ROWS, NUM_COLS, p=0.08);
+    let brd = gliderBoard(NUM_ROWS, NUM_COLS);
     let running_oscs = [];
     draw(brd);
     running_oscs = play(brd);
