@@ -164,7 +164,7 @@ function play(brd, running_oscs=[]) {
         for (let c=0; c < brd.cols; c++) {
     
             if (brd.cells[r][c]) {
-                let newosc = playosc(50+c-r);
+                let newosc = playosc(60+c-r);
                 running_oscs.push(newosc);
             }
         }
@@ -173,20 +173,19 @@ function play(brd, running_oscs=[]) {
 }
 
 
-
-// initialise a board and draw it
-let brd = new Board(NUM_ROWS, NUM_COLS, p=0.15);
-// let brd = gliderBoard(NUM_ROWS, NUM_COLS);
-let running_oscs = [];
-draw(brd);
-running_oscs = play(brd);
-
-// update the drawn board
-function updateDisplayedBrd() {
-    brd = step(brd);
+async function run() {
+    // initialise a board and draw it
+    let brd = new Board(NUM_ROWS, NUM_COLS, p=0.08);
+    // let brd = gliderBoard(NUM_ROWS, NUM_COLS);
+    let running_oscs = [];
     draw(brd);
-    running_oscs = play(brd, running_oscs);
+    running_oscs = play(brd);
+    while(true) {
+        await new Promise(r => setTimeout(r, 125));
+        brd = step(brd);
+        draw(brd);
+        running_oscs = play(brd, running_oscs);
+    }
 }
 
-// step when user clicks the canvas
-canvas.addEventListener('click', updateDisplayedBrd);
+run();
