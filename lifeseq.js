@@ -3,16 +3,16 @@ Number.prototype.mod = function(n) {
     }
 
 // grid options
-const NUM_ROWS = 20;
-const NUM_COLS = 20;
+const NUM_ROWS = 16;
+const NUM_COLS = 16;
 
 // display options
 const LIVE_COLOUR = 'rgb(200, 200, 200)'
 const DEAD_COLOUR = 'rgb(20, 20, 20)'
 
 // audio options
-const VOL_RAMP_TIME = 0.1;
-const FREQ_RAMP_TIME = 0.1;
+const VOL_RAMP_TIME = 0.005;
+const FREQ_RAMP_TIME = 0.005;
 
 // cell constructor
 function Cell(id=undefined, alive=false) {
@@ -59,7 +59,7 @@ function generateCellGrid(rows=16, cols=16, id) {
 // board constructor: random board with probability p of life.
 // set p=0 (default) for empty board
 // defaults to 16x16
-function Board(rows=16, cols=16, p=0) {
+function Board(rows=4, cols=4, p=0) {
     this.rows = rows;
     this.cols = cols;
     this.cells = [];
@@ -171,6 +171,9 @@ function generateOscsAndGains(rows, cols, globalGainNode, audioCtx) {
 function setAllFrequencies(oscs, freqs, audioCtx) {
     for (x = 0; x < oscs.length; x++) {
         for (y = 0; y < oscs[x].length; y++) {
+                    // have to 'set the value to the current value' to prevent clicks
+        // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
+            oscs[x][y].frequency.setValueAtTime(freqs[x][y], audioCtx.currentTime)
             oscs[x][y].frequency.exponentialRampToValueAtTime(freqs[x][y], audioCtx.currentTime + FREQ_RAMP_TIME);
         }
     }
@@ -197,8 +200,10 @@ function play(brd, gains, changed, audioCtx) {
         let x = changed[i][0];
         let y = changed[i][1];
         let new_vol = Number(brd.cells[x][y].alive);
+        // have to 'set the value to the current value' to prevent clicks
+        // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
+        gains[x][y].gain.setValueAtTime(gains[x][y].gain.value, audioCtx.currentTime);
         gains[x][y].gain.linearRampToValueAtTime(new_vol, audioCtx.currentTime + VOL_RAMP_TIME);
-        // gains[x][y].gain.value = new_vol;
     }
 }
 
@@ -208,7 +213,7 @@ const speedControl = document.querySelector('#speed')
 
 async function run(gainNode, audioCtx) {
     // initialise a board and draw it
-    let brd = new Board(NUM_ROWS, NUM_COLS, 0.2);
+    let brd = new Board(NUM_ROWS, NUM_COLS, 0.1);
     draw(brd);
     // set up oscillators and corresponding gains
     let oscsAndGains = generateOscsAndGains(NUM_ROWS, NUM_COLS, gainNode, audioCtx)

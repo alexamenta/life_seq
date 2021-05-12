@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body {
+                font-family: monospace;
+                background: #000000;
+                color: #FFFFFF;
+            }
+        </style>
+
+        <title>test</title>
+    </head>
+
+    <body>
+
+                <button id="start">start</button>
+                <button id="ramp1">ramp to 1</button>
+                <button id="ramp0">ramp to 0</button>
+                <button id="ramp05">ramp to 0.5</button>
+            </div>
+        </div>
+    </body>
+
+    <script>
+        const RAMP_TIME = 0.005;
+        var gainNode;
+        var audioCtx;
+        document.getElementById("start").addEventListener("click", function() {
+            var AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+            gainNode = audioCtx.createGain();
+            gainNode.connect(audioCtx.destination);
+            var osc = audioCtx.createOscillator();
+            osc.connect(gainNode);
+            osc.start();
+        });
+
+        document.getElementById("ramp1").addEventListener("click", function() {
+            gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + RAMP_TIME);
+        });
+
+        document.getElementById("ramp0").addEventListener("click", function() {
+            gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + RAMP_TIME);
+        });
+
+        document.getElementById("ramp05").addEventListener("click", function() {
+            gainNode.gain.setValueAtTime(gainNode.gain.value, audioCtx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + RAMP_TIME);
+        });
+    </script>
+
+
+</html>
