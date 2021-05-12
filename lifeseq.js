@@ -8,21 +8,35 @@ const NUM_COLS = 16;
 
 // display options
 const LIVE_COLOUR = 'rgb(200, 200, 200)'
-const DEAD_COLOUR = 'rgb(20, 20, 20)'
 
 // audio options
 const VOL_RAMP_TIME = 0.005;
 const FREQ_RAMP_TIME = 0.005;
 
+
+/* 
+    -----TODO-------
+   replace cell.alive with cell.vitality
+   which should be a value between 0 and 1
+   and change the corresponding step functions etc.  
+   allowing for continuous range of values
+*/
+
+/* 
+    --TODO--
+    change cell.toggle behaviour (left click for 1, right click for 0)
+*/
+
+
 // cell constructor
-function Cell(id=undefined, alive=false) {
-    this.alive = alive;
+function Cell(id=undefined, vitality=0) {
+    this.vitality = vitality;
     this.id = id; // id of div used to display cell
 
     this.draw = function() {
         if (this.id) {
-            let colour = (this.alive ? LIVE_COLOUR : DEAD_COLOUR);
-            document.getElementById(this.id).style.backgroundColor = colour;
+            document.getElementById(this.id).style.backgroundColor = LIVE_COLOUR;
+            document.getElementById(this.id).style.opacity = this.vitality;
         } else {
             console.log("Tried to draw cell with undefined id");
         }
@@ -32,7 +46,7 @@ function Cell(id=undefined, alive=false) {
     var that = this;
 
     this.toggle = function() {
-        that.alive = !that.alive;
+        that.vitality = 1;
         that.draw();
     }
 
@@ -66,7 +80,7 @@ function Board(rows=4, cols=4, p=0) {
     for (let x=0; x<rows; x++) {
         this.cells.push([]); 
         for (let y=0; y<cols; y++) {
-            let cell = new Cell(cellId(x,y), Math.random() < p);
+            let cell = new Cell(cellId(x,y), Number(Math.random() < p));
             this.cells[x].push(cell);
             document.getElementById(cell.id).addEventListener('click', cell.toggle);
         }
@@ -78,51 +92,80 @@ function Board(rows=4, cols=4, p=0) {
 // should have rows, cols >= 2
 function gliderBoard(rows=16, cols=16) {
     let board = new Board(rows, cols);
-    board.cells[0][1].alive = true;
-    board.cells[1][0].alive = true;
-    board.cells[2][0].alive = true;
-    board.cells[2][1].alive = true;
-    board.cells[2][2].alive = true;
+    board.cells[0][1].vitality = 1;
+    board.cells[1][0].vitality = 1;
+    board.cells[2][0].vitality = 1;
+    board.cells[2][1].vitality = 1;
+    board.cells[2][2].vitality = 1;
     return board;
 }
 
-// apply Conway's life rule to the board
+function uniformRandom(rows, cols=16) {
+    let board = new Board(rows, cols);
+    for (let x=0; x < rows; x++) {
+        for (let y=0; y<cols; y++) {
+            board.cells[x][y].vitality = Math.random();
+        }
+    }
+    return board;
+}
+
+// only use this on (0,1)-valued cells
+function conway(nbr_vitality, cell_vitality) {
+    // live cells need 2 or 3 live neighbours to live
+    if (cell_vitality == 1 && (nbr_vitality >= 2 && nbr_vitality <= 3)) {
+        return 1;
+    } else if (cell_vitality == 0 && nbr_vitality == 3) {
+        return 1;
+    }
+    return 0;
+}
+
+// a kind of linear/polynomial interpolation determined by the 
+// 'boolean' conway function, along with
+// soft_conway(2, 0) = soft_conway(4, 0) = 0
+// soft_conway(1, 1) = soft_conway(4, 0) = 0
+// i have a graph of this which should be in documentation somewhere 
+function soft_conway(liveliness) {
+    return function(nbr_vitality, cell_vitality) {
+        if (nbr_vitality >= 3) { 
+            return Math.max(0, 4-nbr_vitality)**liveliness; 
+        } else if (nbr_vitality < 3) { 
+            return Math.min(1, Math.max(0, nbr_vitality + cell_vitality - 2))**liveliness;
+        }
+    }
+}
+
+// apply given to the board
 // and return the new board
 // (does not mutate brd)
-function step(brd) {
+// heat controls random fluctuations
+function step(brd, heat, rule=conway) {
     let r = brd.rows;
     let c = brd.cols;
     let new_brd = new Board(r,c);
-    let changed = []; // indices for which the value has changed
 
     for (let x=0; x<r; x++) {
         for (let y=0; y<c; y++) {
             // count number of live neighbours
-            let live_nbrs = 0;
+            let nbr_vitality = 0;
             for (let dx = -1; dx <= 1; dx++) {
                 for (let dy = -1; dy <= 1; dy++) {
                     if (dx != 0 || dy != 0) {
-                        nbr_status = brd.cells[(x + dx).mod(r)][(y + dy).mod(c)].alive;
-                        live_nbrs += Number(nbr_status);
+                        nbr_vitality += brd.cells[(x + dx).mod(r)][(y + dy).mod(c)].vitality;
                     }
                 }
             }
 
-            // live cells need 2 or 3 live neighbours to live
-            if (brd.cells[x][y].alive) {
-                new_brd.cells[x][y].alive = (live_nbrs == 2 || live_nbrs == 3);
-            } else {
-                new_brd.cells[x][y].alive = (live_nbrs == 3);
+            let cell_vitality = brd.cells[x][y].vitality;
+            new_brd.cells[x][y].vitality = rule(nbr_vitality, cell_vitality);
+            if (heat) {
+                new_brd.cells[x][y].vitality += heat*Math.random();
             }
-
-            // track whether the cell has changed
-            if (new_brd.cells[x][y].alive != brd.cells[x][y].alive) {
-                changed.push([x,y]);
-            } 
         }
     }
 
-    return [new_brd, changed];
+    return new_brd;
 }
 
 // draw given board to HTML (assumes all the cell IDs are assigned right)
@@ -179,6 +222,10 @@ function setAllFrequencies(oscs, freqs, audioCtx) {
     }
 }
 
+function index(x, y, num_rows) {
+    return (x*num_rows + y)/(num_rows**2);
+}
+
 // generate the matrix of frequencies
 // this is just an ad-hoc definition, can be changed
 function freqMatrixGenerator(num_rows, num_cols, multiplier, rootNote) {
@@ -186,34 +233,42 @@ function freqMatrixGenerator(num_rows, num_cols, multiplier, rootNote) {
     for (x = 0; x < num_rows; x++) {
         freqs.push([]);
         for (y = 0; y < num_cols; y++) {
-            freqs[x].push(noteToFreq(rootNote) + multiplier*(3*x*NUM_ROWS + 2*y));
+            // truncate at max frequency allowed, 22050
+            freqs[x].push(Math.min(noteToFreq(rootNote)*(1 + (multiplier**2)*index(x,y, num_rows)/2), 22050));
         }
     }
     return freqs;
 }
 
+
+function dampCurve(x, y, num_rows, factor) {
+    return (1 - index(x, y, num_rows))**factor;
+}
+
 // 'play' the board
 // this just adjusts gains for each step
-function play(brd, gains, changed, audioCtx) {
-    for (let i = 0; i < changed.length; i++) {
-        // index of a cell whose state has changed
-        let x = changed[i][0];
-        let y = changed[i][1];
-        let new_vol = Number(brd.cells[x][y].alive);
-        // have to 'set the value to the current value' to prevent clicks
-        // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
-        gains[x][y].gain.setValueAtTime(gains[x][y].gain.value, audioCtx.currentTime);
-        gains[x][y].gain.linearRampToValueAtTime(new_vol, audioCtx.currentTime + VOL_RAMP_TIME);
+function play(brd, gains, audioCtx, damping) {
+    for (let x = 0; x < brd.rows; x++) {
+        for (let y = 0; y < brd.cols; y++) {
+            let new_vol = dampCurve(x,y, brd.rows, damping)*brd.cells[x][y].vitality;
+            // have to 'set the value to the current value' to prevent clicks
+            // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
+            gains[x][y].gain.setValueAtTime(gains[x][y].gain.value, audioCtx.currentTime);
+            gains[x][y].gain.linearRampToValueAtTime(new_vol, audioCtx.currentTime + VOL_RAMP_TIME);
+        }
     }
 }
 
 const rootNoteControl = document.querySelector('#rootnote');
 const multiplierControl = document.querySelector('#multiplier');
+const dampingControl = document.querySelector('#damping');
 const speedControl = document.querySelector('#speed')
+const livelinessControl = document.querySelector('#liveliness');
+const heatControl = document.querySelector('#heat');
 
-async function run(gainNode, audioCtx) {
+async function run(rule, gainNode, audioCtx) {
     // initialise a board and draw it
-    let brd = new Board(NUM_ROWS, NUM_COLS, 0.1);
+    let brd = uniformRandom(NUM_ROWS, NUM_COLS, 0.1);
     draw(brd);
     // set up oscillators and corresponding gains
     let oscsAndGains = generateOscsAndGains(NUM_ROWS, NUM_COLS, gainNode, audioCtx)
@@ -223,6 +278,7 @@ async function run(gainNode, audioCtx) {
     let old_rootnote = rootNoteControl.value/1;
     let old_multiplier = multiplierControl.value/1;
     let delay;
+    let liveliness = livelinessControl.value/1;
     // form frequency matrix
     freqs = freqMatrixGenerator(NUM_ROWS, NUM_COLS, old_multiplier, old_rootnote);
     // set oscillator initial frequencies
@@ -238,6 +294,11 @@ async function run(gainNode, audioCtx) {
         // get tonal parameter values
         let new_rootnote = rootNoteControl.value/1;
         let new_multiplier = multiplierControl.value/1;
+        let damping = dampingControl.value/1;
+
+        // get rule control variables
+        let liveliness = livelinessControl.value/1;
+        let heat = heatControl.value/1;
 
         // change frequencies only if a tonal parameter has changed
         if (new_rootnote != old_rootnote || new_multiplier != old_multiplier) {
@@ -249,15 +310,14 @@ async function run(gainNode, audioCtx) {
         }
 
         // update, play, and draw board
-        let stepdata = step(brd);
-        brd = stepdata[0];
-        changed = stepdata[1];
-        play(brd, gains, changed, audioCtx);        
+        brd = step(brd, heat, soft_conway(liveliness));
+        play(brd, gains, audioCtx, damping);        
         draw(brd);
     }
 }
 
 document.getElementById("start").addEventListener("click", function() {
+    let rule = soft_conway;
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const audioCtx = new AudioContext();
     // global gain node, to adjust volume
@@ -269,5 +329,5 @@ document.getElementById("start").addEventListener("click", function() {
     gainNode.gain.value = this.value;
     }, false);
     generateCellGrid(NUM_ROWS, NUM_COLS);
-    run(gainNode, audioCtx);
+    run(rule, gainNode, audioCtx);
 }); 
