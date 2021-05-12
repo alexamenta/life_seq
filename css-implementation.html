@@ -9,15 +9,24 @@
                 background: #000000;
                 color: #FFFFFF;
             }
-            mainbox {
+            .mainbox {
+                display: grid;
+                grid-template-columns: auto auto;
                 position: absolute;
                 top: 0%;
                 left: 0%;
             }
-            .container {
+            .panel {
+                background-color: #220022;
+            }
+            .lifegrid {
                 display: grid;
                 grid-template-columns: repeat(20, 10px);
                 grid-template-rows: repeat(20, 10px);
+                margin: 4px 4px 4px 4px;
+                border: 2pt;
+                border-style: solid;
+                border-color: #AAAAAA;
             }
             .cell {
                 border-color: #AAAAAA;
@@ -28,24 +37,32 @@
     </head>
 
     <body>
-        <div class="container" id="seq-area">
+        <div class="mainbox">
+            <div class="lifegrid" id="seq-area">
+            </div>
+            <div class="panel" id="controls">
+                <label for="volume">vol</label>
+                <input type="range" id="volume" min="0" max="0.08" value="0.05" step="0.005">
+                <br>
+            
+                <label for="rootnote">root note</label>
+                <input type="range" id="rootnote" min="0" max="127" value="34" step="1">
+                <br>
+            
+                <label for="multiplier">multiplier</label>
+                <input type="range" id="multiplier" min="0.01" max="2" value="1" step="0.001">
+                <br>
+            
+                <label for="speed">speed</label>
+                <input type="range" id="speed" min="0.001" max="0.05" value="0.005" step="0.0001">
+                <br>
+
+                <button id="start">start</button>
+            </div>
         </div>
-        <label for="start">start</label>
-        <button id="start"></button>
-        <label for="volume">vol</label>
-        <input type="range" id="volume" min="0" max="0.08" value="0.05" step="0.005">
-        <br>
-        <label for="rootnote">root note</label>
-        <input type="range" id="rootnote" min="0" max="127" value="34" step="1">
-        <br>
-        <label for="multiplier">multiplier</label>
-        <input type="range" id="multiplier" min="0.01" max="2" value="1" step="0.001">
-        <br>
-        <label for="speed">speed</label>
-        <input type="range" id="speed" min="0.001" max="0.05" value="0.005" step="0.0001">
     </body>
 
-    <script src="lifeseq-h.js"></script>
+    <script src="lifeseq.js"></script>
 
 
 </html>
