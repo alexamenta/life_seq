@@ -11,6 +11,13 @@ Number.prototype.mod = function(n) {
     return ((this%n)+n)%n;
     }
 
+
+
+
+function cellId(x,y) {
+        return "cell:" + x + "," + y;
+    }
+
 function index(x, y, gridSize) {
     return (x*gridSize + y)/(gridSize**2);
 }
@@ -20,9 +27,15 @@ function noteToFreq(note) {
     return (a / 32) * (2 ** (note/ 12));
 }
 
-function cellId(x,y) {
-        return "cell:" + x + "," + y;
-    }
+function freqMultiplier(x, y, gridSize, multiplier) {
+    return 1 + (2**(multiplier))*index(x, y, gridSize);
+}
+
+// frequency dampening curve
+// harmonic >= 1 (output of freqMultiplier)
+function dampCurve(x, y, gridSize, factor) {
+    return (1 - index(x, y, gridSize))**factor;
+}
 
 // a kind of linear/polynomial interpolation determined by the 
 // 'boolean' conway function, along with
@@ -216,13 +229,11 @@ function HtmlInterface(document, gridSize) {
 // an instance of life_syn
 function SynthInstance(interface, gridSize) {
 
-    // use when there are scope issues
-    let synth = this;
-
     this.state = {
-        brd: new Board(synth.gridSize, 0),
+        brd: new Board(this.gridSize, 0),
         rootNote: undefined,
         multiplier: undefined,
+        damping: undefined,
         delay: undefined,
         liveliness: undefined
         }
@@ -230,13 +241,19 @@ function SynthInstance(interface, gridSize) {
     this.interface = interface;
     this.interface.connectBoard(this.state.brd);
 
+
+    // use when there are scope issues
+    let synth = this;
+    let state = this.state;
+    let iface = this.interface;
+
     this.gridSize = gridSize;
     this.audioCtx = undefined;
     this.gainNode = undefined;
     this.oscs = undefined;
     this.gains = undefined;
     this.on = false;
-    this.rule = soft_conway; // put in a selector for this?
+    this.rule = soft_conway; // can be remoived?
 
 
 
@@ -250,10 +267,6 @@ function SynthInstance(interface, gridSize) {
             : synth.run();
     })
 
-    this._dampCurve = function(x, y, gridSize, factor) {
-        return (1 - index(x, y, synth.gridSize))**factor;
-    }
-
 
     // generate matrix of frequencies
     // this is just an ad-hoc definition, can be changed
@@ -263,7 +276,7 @@ function SynthInstance(interface, gridSize) {
             freqs.push([]);
             for (y = 0; y < synth.gridSize; y++) {
                 // truncate at max frequency allowed, 22050
-                freqs[x].push(Math.min(noteToFreq(synth.state.rootNote)*(1 + (synth.state.multiplier**2)*index(x,y, synth.gridSize)/2), 22050));
+                freqs[x].push(Math.min(noteToFreq(synth.state.rootNote)*freqMultiplier(x, y, synth.gridSize, synth.state.multiplier), 22050));
             }
         }
         return freqs;
@@ -347,7 +360,7 @@ function SynthInstance(interface, gridSize) {
 
             for (let x = 0; x < synth.gridSize; x++) {
                 for (let y = 0; y < synth.gridSize; y++) {
-                    let new_vol = synth._dampCurve(x,y, synth.gridSize, synth.state.damping)*synth.state.brd.cells[x][y];
+                    let new_vol = dampCurve(x, y, synth.gridSize, synth.state.damping)*synth.state.brd.cells[x][y];
                     // have to 'set the value to the current value' to prevent clicks
                     // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
                     synth.gains[x][y].gain.setValueAtTime(synth.gains[x][y].gain.value, synth.audioCtx.currentTime);
@@ -390,7 +403,7 @@ function SynthInstance(interface, gridSize) {
                 // get tonal parameter values
                 // we check whether the root note or multiplier has changed
                 // so we can avoid generating new freq matrix unless we need it
-                let new_rootnote = iface.rootNoteControl.value/1;
+                let new_rootNote = iface.rootNoteControl.value/1;
                 let new_multiplier = iface.multiplierControl.value/1;
                 state.damping = iface.dampingControl.value/1;
         
@@ -399,8 +412,8 @@ function SynthInstance(interface, gridSize) {
                 state.heat = iface.heatControl.value/1;
         
                 // change frequencies only if a tonal parameter has changed
-                if (new_rootnote != state.rootnote || new_multiplier != state.multiplier) {
-                    state.rootnote = new_rootnote;
+                if (new_rootNote != state.rootnote || new_multiplier != state.multiplier) {
+                    state.rootNote = new_rootNote;
                     state.multiplier = new_multiplier;
                     freqs = synth._generateFreqMatrix();
                     synth._setAllFrequencies(freqs);
