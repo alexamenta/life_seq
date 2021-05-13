@@ -2,6 +2,10 @@ Number.prototype.mod = function(n) {
     return ((this%n)+n)%n;
     }
 
+// debug
+var BOARDS_CREATED = 0;
+var CELLS_CREATED = 0;
+
 // grid options
 const NUM_ROWS = 16;
 const NUM_COLS = 16;
@@ -30,6 +34,7 @@ const FREQ_RAMP_TIME = 0.005;
 
 // cell constructor
 function Cell(id=undefined, vitality=0) {
+    CELLS_CREATED++;
     this.vitality = vitality;
     this.id = id; // id of div used to display cell
 
@@ -74,6 +79,7 @@ function generateCellGrid(rows=16, cols=16, id) {
 // set p=0 (default) for empty board
 // defaults to 16x16
 function Board(rows=4, cols=4, p=0) {
+    BOARDS_CREATED++;
     this.rows = rows;
     this.cols = cols;
     this.cells = [];
@@ -136,16 +142,17 @@ function soft_conway(liveliness) {
     }
 }
 
-// apply given to the board
-// and return the new board
-// (does not mutate brd)
+// apply given rule to the new board
 // heat controls random fluctuations
 function step(brd, heat, rule=conway) {
     let r = brd.rows;
     let c = brd.cols;
-    let new_brd = new Board(r,c);
+
+    // create array to construct the new state (w/o constructing a new board)
+    let new_state = [];
 
     for (let x=0; x<r; x++) {
+        new_state.push([]);
         for (let y=0; y<c; y++) {
             // count number of live neighbours
             let nbr_vitality = 0;
@@ -158,14 +165,20 @@ function step(brd, heat, rule=conway) {
             }
 
             let cell_vitality = brd.cells[x][y].vitality;
-            new_brd.cells[x][y].vitality = rule(nbr_vitality, cell_vitality);
+            let noise = 0;
             if (heat) {
-                new_brd.cells[x][y].vitality += heat*Math.random();
+                noise += heat*Math.random();
             }
+            new_state[x].push(rule(nbr_vitality, cell_vitality) + noise);
         }
     }
 
-    return new_brd;
+    // update board to the new state
+    for (let x=0; x<r; x++) {
+        for (let y=0; y<c; y++) {
+            brd.cells[x][y].vitality = new_state[x][y];
+        }
+    }
 }
 
 // draw given board to HTML (assumes all the cell IDs are assigned right)
@@ -310,7 +323,7 @@ async function run(rule, gainNode, audioCtx) {
         }
 
         // update, play, and draw board
-        brd = step(brd, heat, soft_conway(liveliness));
+        step(brd, heat, soft_conway(liveliness));
         play(brd, gains, audioCtx, damping);        
         draw(brd);
     }
