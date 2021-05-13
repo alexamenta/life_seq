@@ -31,6 +31,9 @@
             .cell {
                 border-color: #AAAAAA;
             }
+            .powerlight {
+                background-color: #777700;
+            }
         </style>
 
         <title>lifeseq</title>
@@ -69,7 +72,10 @@
                 <input type="range" id="speed" min="0.001" max="0.05" value="0.008" step="0.0001">
                 <br>
 
-                <button id="start">start</button>
+                <button id="power">power</button>
+
+                <button id="start">start</button><br>
+                <div class="powerlight" id="powerlight">this is the power light</div>
             </div>
         </div>
     </body>

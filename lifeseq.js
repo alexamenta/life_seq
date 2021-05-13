@@ -1,205 +1,120 @@
+let AudioContext = window.AudioContext || window.webkitAudioContext;
+
+// options
+const GRIDSIZE = 16;
+const LIVE_COLOUR = 'rgb(200, 200, 200)'
+const VOL_RAMP_TIME = 0.005;
+const FREQ_RAMP_TIME = 0.005;
+
+// auxiliary functions
 Number.prototype.mod = function(n) {
     return ((this%n)+n)%n;
     }
 
-// grid options
-const NUM_ROWS = 16;
-const NUM_COLS = 16;
-
-// display options
-const LIVE_COLOUR = 'rgb(200, 200, 200)'
-
-// audio options
-const VOL_RAMP_TIME = 0.005;
-const FREQ_RAMP_TIME = 0.005;
-
-/* 
-    --TODO--
-    change cell.toggle behaviour (left click for 1, right click for 0)
-*/
-
-// cell constructor
-function Cell(id=undefined, vitality=0) {
-    this.vitality = vitality;
-    this.id = id; // id of div used to display cell
-
-    this.draw = function() {
-        if (this.id) {
-            document.getElementById(this.id).style.backgroundColor = LIVE_COLOUR;
-            document.getElementById(this.id).style.opacity = this.vitality;
-        } else {
-            console.log("Tried to draw cell with undefined id");
-        }
-    }
-
-    this.element = document.getElementById(this.id);
-
-    // scope issues prevent that.draw() from working
-    var that = this;
-
-    // set vitality = 1 on left click
-    // and = 0 on 'right click'
-    this.element.addEventListener('click', function() {
-        that.vitality = 1;
-        that.draw();
-    });
-    this.element.addEventListener('contextmenu', function(ev) {
-        ev.preventDefault();
-        that.vitality = 0;
-        that.draw();
-        return false; // prevent context menu from appearing
-    }, false);
-
+function index(x, y, gridSize) {
+    return (x*gridSize + y)/(gridSize**2);
 }
 
-// cell id generator for HTML elements
+function noteToFreq(note) {
+    let a = 110;
+    return (a / 32) * (2 ** (note/ 12));
+}
+
 function cellId(x,y) {
-    return "cell:" + x + "," + y;
-}
-
-// generate grid of html-element cells
-// in the element with given id
-function generateCellGrid(rows=16, cols=16, id) {
-    for (let x=0; x < rows; x++) {
-        for (let y=0; y < cols; y++) {
-        let cell = document.createElement("div");
-        cell.className = "cell";
-        cell.id = cellId(x,y);
-        document.getElementById("seq-area").appendChild(cell);
-        }
+        return "cell:" + x + "," + y;
     }
-}
-
-// board constructor: random board with probability p of life.
-// set p=0 (default) for empty board
-// defaults to 16x16
-function Board(rows=4, cols=4, p=0) {
-    this.rows = rows;
-    this.cols = cols;
-    this.cells = [];
-    for (let x=0; x<rows; x++) {
-        this.cells.push([]); 
-        for (let y=0; y<cols; y++) {
-            let cell = new Cell(cellId(x,y), Number(Math.random() < p));
-            this.cells[x].push(cell);
-        }
-    }
-}
-
-// initialise a glider
-// defaults to 16x16 board
-// should have rows, cols >= 2
-function gliderBoard(rows=16, cols=16) {
-    let board = new Board(rows, cols);
-    board.cells[0][1].vitality = 1;
-    board.cells[1][0].vitality = 1;
-    board.cells[2][0].vitality = 1;
-    board.cells[2][1].vitality = 1;
-    board.cells[2][2].vitality = 1;
-    return board;
-}
-
-function uniformRandom(rows, cols=16) {
-    let board = new Board(rows, cols);
-    for (let x=0; x < rows; x++) {
-        for (let y=0; y<cols; y++) {
-            board.cells[x][y].vitality = Math.random();
-        }
-    }
-    return board;
-}
-
-// only use this on (0,1)-valued cells
-function conway(nbr_vitality, cell_vitality) {
-    // live cells need 2 or 3 live neighbours to live
-    if (cell_vitality == 1 && (nbr_vitality >= 2 && nbr_vitality <= 3)) {
-        return 1;
-    } else if (cell_vitality == 0 && nbr_vitality == 3) {
-        return 1;
-    }
-    return 0;
-}
 
 // a kind of linear/polynomial interpolation determined by the 
 // 'boolean' conway function, along with
 // soft_conway(2, 0) = soft_conway(4, 0) = 0
 // soft_conway(1, 1) = soft_conway(4, 0) = 0
 // i have a graph of this which should be in documentation somewhere 
-function soft_conway(liveliness) {
+function soft_conway(liveliness, heat) {
     return function(nbr_vitality, cell_vitality) {
-        if (nbr_vitality >= 3) { 
-            return Math.max(0, 4-nbr_vitality)**liveliness; 
-        } else if (nbr_vitality < 3) { 
-            return Math.min(1, Math.max(0, nbr_vitality + cell_vitality - 2))**liveliness;
+
+        let noise = 0;
+        if (heat) {
+            noise += heat*Math.random();
         }
+
+        if (nbr_vitality >= 3) { 
+            return Math.max(0, 4-nbr_vitality)**liveliness + noise; 
+        } else if (nbr_vitality < 3) { 
+            return Math.min(1, Math.max(0, nbr_vitality + cell_vitality - 2))**liveliness + noise;
+        }
+
     }
 }
 
-// apply given rule to the new board
-// heat controls random fluctuations
-function step(brd, heat, rule=conway) {
-    let r = brd.rows;
-    let c = brd.cols;
+// board constructor: random board with probability p of life.
+// set p=0 (default) for empty board
+function Board(gridSize=16, p=0) {
+    let brd = this;
+    this.gridSize = gridSize;
+    this.cells = [];
+    for (let x=0; x<gridSize; x++) {
+        this.cells.push([]); 
+        for (let y=0; y<gridSize; y++) {
+            this.cells[x].push(Number(Math.random() < p));
+        }
+    }
 
-    // create array to construct the new state (w/o constructing a new board)
-    let new_state = [];
+    // apply given rule to the new board
+    // heat controls random fluctuations
+    this.step = function(rule) {
 
-    for (let x=0; x<r; x++) {
-        new_state.push([]);
-        for (let y=0; y<c; y++) {
-            // count number of live neighbours
-            let nbr_vitality = 0;
-            for (let dx = -1; dx <= 1; dx++) {
-                for (let dy = -1; dy <= 1; dy++) {
-                    if (dx != 0 || dy != 0) {
-                        nbr_vitality += brd.cells[(x + dx).mod(r)][(y + dy).mod(c)].vitality;
+        // create array to construct the new state (w/o constructing a new board)
+        let new_state = [];
+
+        // compute new state
+        for (let x=0; x<brd.gridSize; x++) {
+            new_state.push([]);
+            for (let y=0; y<brd.gridSize; y++) {
+                // count number of live neighbours
+                let nbr_vitality = 0;
+                for (let dx = -1; dx <= 1; dx++) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        if (dx != 0 || dy != 0) {
+                            nbr_vitality += brd.cells[(x + dx).mod(brd.gridSize)][(y + dy).mod(brd.gridSize)];
+                        }
                     }
                 }
+
+                let cell_vitality = brd.cells[x][y];
+                new_state[x].push(rule(nbr_vitality, cell_vitality));
             }
-
-            let cell_vitality = brd.cells[x][y].vitality;
-            let noise = 0;
-            if (heat) {
-                noise += heat*Math.random();
-            }
-            new_state[x].push(rule(nbr_vitality, cell_vitality) + noise);
         }
-    }
 
-    // update board to the new state
-    for (let x=0; x<r; x++) {
-        for (let y=0; y<c; y++) {
-            brd.cells[x][y].vitality = new_state[x][y];
-        }
+        brd.cells = new_state;
+
     }
 }
 
-// draw given board to HTML (assumes all the cell IDs are assigned right)
-function draw(brd) {
-    for (let x=0; x < brd.rows; x++) {
-        for (let y=0; y < brd.cols; y++) {
-            brd.cells[x][y].draw();
-        }
-    }
+// initialise a glider
+// defaults to 16x16 board
+// should have gridsize >= 3
+function createGliderBoard(gridSize=16) {
+    let board = new Board(rows, cols);
+    board.cells[0][1] = 1;
+    board.cells[1][0] = 1;
+    board.cells[2][0] = 1;
+    board.cells[2][1] = 1;
+    board.cells[2][2] = 1;
+    return board;
 }
 
-// frequency data
-function noteToFreq(note) {
-    let a = 110;
-    return (a / 32) * (2 ** (note/ 12));
-}
 
 // generates oscillator and gain node matrices
 // frequencies all set to 440 by default
 // gains all set to 0 by default
 // these will be changed later in the program
-function generateOscsAndGains(rows, cols, globalGainNode, audioCtx) {
+function generateOscsAndGains(gridSize, globalGainNode, audioCtx) {
     let oscs = [];
     let gains = [];
-    for (let x=0; x < rows; x++) {
+    for (let x=0; x < gridSize; x++) {
         oscs.push([]);
         gains.push([]);
-        for (let y=0; y < cols; y++) {
+        for (let y=0; y < gridSize; y++) {
             let newOsc = audioCtx.createOscillator();
             oscs[x].push(newOsc);
 
@@ -214,125 +129,294 @@ function generateOscsAndGains(rows, cols, globalGainNode, audioCtx) {
     return [oscs, gains];
 }
 
-// given doubly-indexed arrays of oscillators and frequencies (of the same shape)
-// ramp the frequencies to the new values
-function setAllFrequencies(oscs, freqs, audioCtx) {
-    for (x = 0; x < oscs.length; x++) {
-        for (y = 0; y < oscs[x].length; y++) {
+
+
+function HtmlInterface(document, gridSize) {
+    let iface = this;
+    this.document = document;
+    this.gridSize = gridSize;
+    this.powerControl = document.getElementById('power');
+    this.startButton = document.getElementById("start")
+    this.volumeControl = document.getElementById('volume');
+    this.rootNoteControl = document.getElementById('rootnote');
+    this.multiplierControl = document.getElementById('multiplier');
+    this.dampingControl = document.getElementById('damping');
+    this.speedControl = document.getElementById('speed')
+    this.livelinessControl = document.getElementById('liveliness');
+    this.heatControl = document.getElementById('heat');
+    this.powerLight = document.getElementById('powerlight')
+
+    this.connectedBoard = undefined;
+
+
+
+    // generate cell grid
+    for (let x=0; x < gridSize; x++) {
+        for (let y=0; y < gridSize; y++) {
+            // place cell element in sequencer area
+            let cell = document.createElement("div");
+            cell.className = "cell";
+            cell.id = cellId(x,y);
+            document.getElementById("seq-area").appendChild(cell);
+        }
+    }
+
+    // add event listeners for left and right click on cell
+    // left click: vitality 1
+    // right click: vitality 0
+    this.connectBoard = function(brd) {
+
+        if (brd.gridSize != iface.gridSize) {
+            console.log("board and interface have mismatched gridsizes");
+        } else {
+
+            iface.connectedBoard = brd;
+
+            for (let x=0; x < this.gridSize; x++) {
+                for (let y=0; y < this.gridSize; y++) {
+                    cell = iface.document.getElementById(cellId(x,y)); 
+                    cell.addEventListener('click', function() {
+                        brd.cells[x][y] = 1;
+                        iface.draw();
+                    });
+                    cell.addEventListener('contextmenu', function(ev) {
+                        ev.preventDefault();
+                        brd.cells[x][y] = 0;
+                        iface.draw();
+                        return false; // prevent context menu from appearing
+                    }, false);
+                }
+            }
+        }
+
+    }
+
+    // draw a connected board on the HTML interface
+    // should have matching grid sizes
+    this.draw = function() {
+
+
+        if (!iface.connectedBoard) {
+            console.log("no connected board");
+        } else {
+            brd = iface.connectedBoard;
+            for (let x=0; x < brd.gridSize; x++) {
+                for (let y=0; y < brd.gridSize; y++) {
+                    let cellElement = document.getElementById(cellId(x,y));
+                    cellElement.style.backgroundColor = LIVE_COLOUR;
+                    cellElement.style.opacity = brd.cells[x][y];
+                }
+            }
+        }
+
+    }
+}
+
+
+// an instance of life_syn
+function SynthInstance(interface, gridSize) {
+
+    // use when there are scope issues
+    let synth = this;
+
+    this.state = {
+        brd: new Board(synth.gridSize, 0),
+        rootNote: undefined,
+        multiplier: undefined,
+        delay: undefined,
+        liveliness: undefined
+        }
+
+    this.interface = interface;
+    this.interface.connectBoard(this.state.brd);
+
+    this.gridSize = gridSize;
+    this.audioCtx = undefined;
+    this.gainNode = undefined;
+    this.oscs = undefined;
+    this.gains = undefined;
+    this.on = false;
+    this.rule = soft_conway; // put in a selector for this?
+
+
+
+    this.interface.powerControl.addEventListener('click', function() {
+        synth.on ? synth.switchOff() : synth.switchOn()
+    });
+
+    this.interface.startButton.addEventListener('click', function() {
+        !synth.on ? console.log("Synth is not turned on")
+            : synth.running? console.log("Synth is already running")
+            : synth.run();
+    })
+
+    this._dampCurve = function(x, y, gridSize, factor) {
+        return (1 - index(x, y, synth.gridSize))**factor;
+    }
+
+
+    // generate matrix of frequencies
+    // this is just an ad-hoc definition, can be changed
+    this._generateFreqMatrix = function() {
+        let freqs = [];
+        for (x = 0; x < synth.gridSize; x++) {
+            freqs.push([]);
+            for (y = 0; y < synth.gridSize; y++) {
+                // truncate at max frequency allowed, 22050
+                freqs[x].push(Math.min(noteToFreq(synth.state.rootNote)*(1 + (synth.state.multiplier**2)*index(x,y, synth.gridSize)/2), 22050));
+            }
+        }
+        return freqs;
+    }
+
+    // given doubly-indexed arrays of oscillators and frequencies (of the same shape)
+    // ramp the frequencies to the new values
+    this._setAllFrequencies = function(freqs) {
+        for (x = 0; x < synth.gridSize; x++) {
+            for (y = 0; y < synth.gridSize; y++) {
+                // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
+                synth.oscs[x][y].frequency.setValueAtTime(synth.oscs[x][y].frequency.value, synth.audioCtx.currentTime)
+                synth.oscs[x][y].frequency.exponentialRampToValueAtTime(freqs[x][y], synth.audioCtx.currentTime + FREQ_RAMP_TIME);
+            }
+        }
+    }
+
+    this._readyToPlay = function() {
+        if (!synth.audioCtx) {
+            console.log("audio context not found");
+            return false;
+        } else if (!synth.gainNode) {
+            console.log("gain node not found");
+            return false;
+        } else if (!synth.on) {
+            console.log("synth is not turned on");
+            return false;
+        } else {
+            return true;
+        }
+    }
+    
+    this.switchOn = function() {
+        if (!this.on) {
+            this.on = true;
+            synth.interface.draw(synth.state.brd);
+            this.interface.powerLight.style.backgroundColor = "#FFFF00"
+            this.initialiseAudio();
+        } else {
+            console.log("Synth is already on");
+        }
+    }
+
+    this.switchOff = function() {
+        if (this.on) {
+            this.audioCtx.close().then(function() {
+                synth.audioCtx = undefined;
+                synth.on = false;
+                synth.interface.powerLight.style.backgroundColor = "#777700";
+            })
+        } else {
+            console.log("Synth is already off");
+        }
+    }
+
+    this.initialiseAudio = function() {
+        // initialise audio context
+        let audioCtx = new AudioContext();
+
+        // global gain node, to adjust volume
+        let gainNode = audioCtx.createGain();
+        gainNode.gain.value = synth.interface.volumeControl.value;
+        synth.interface.volumeControl.addEventListener('input', function() {
+            gainNode.gain.value = this.value;
+        }, false);
+        gainNode.connect(audioCtx.destination);
+
+        synth.audioCtx = audioCtx;
+        synth.gainNode = gainNode;
+
+        // set up oscillators and corresponding gains
+        let oscsAndGains = generateOscsAndGains(synth.gridSize, gainNode, audioCtx)
+        synth.oscs = oscsAndGains[0];
+        synth.gains = oscsAndGains[1];
+    }
+
+    // play the current board
+    this.play = function() {
+
+        if (synth._readyToPlay()) {
+
+            for (let x = 0; x < synth.gridSize; x++) {
+                for (let y = 0; y < synth.gridSize; y++) {
+                    let new_vol = synth._dampCurve(x,y, synth.gridSize, synth.state.damping)*synth.state.brd.cells[x][y];
                     // have to 'set the value to the current value' to prevent clicks
-        // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
-            oscs[x][y].frequency.setValueAtTime(freqs[x][y], audioCtx.currentTime)
-            oscs[x][y].frequency.exponentialRampToValueAtTime(freqs[x][y], audioCtx.currentTime + FREQ_RAMP_TIME);
+                    // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
+                    synth.gains[x][y].gain.setValueAtTime(synth.gains[x][y].gain.value, synth.audioCtx.currentTime);
+                    synth.gains[x][y].gain.linearRampToValueAtTime(new_vol, synth.audioCtx.currentTime + VOL_RAMP_TIME);
+                }
+            }
+
+        }
+
+    }
+
+    // run the synth!
+    this.run = async function() {
+        
+        if (!synth.audioCtx) {console.log("audio context not found");}
+        else if (!synth.gainNode) {console.log("gain node not found");}
+        else if (!synth.on) {console.log("synth is not turned on");}
+        else {
+
+            state = synth.state;
+            iface = synth.interface;
+
+            // get initial parameters
+            state.rootNote = iface.rootNoteControl.value/1;
+            state.multiplier = iface.multiplierControl.value/1;
+            state.liveliness = iface.livelinessControl.value/1;
+
+            // form frequency matrix
+            freqs = synth._generateFreqMatrix();
+            // set oscillator initial frequencies
+            synth._setAllFrequencies(freqs);
+        
+            // main loop
+            while(true) {
+        
+                // get delay parameter, and wait
+                state.delay = 1/iface.speedControl.value;
+                await new Promise(r => setTimeout(r, Math.floor(state.delay)));
+        
+                // get tonal parameter values
+                // we check whether the root note or multiplier has changed
+                // so we can avoid generating new freq matrix unless we need it
+                let new_rootnote = iface.rootNoteControl.value/1;
+                let new_multiplier = iface.multiplierControl.value/1;
+                state.damping = iface.dampingControl.value/1;
+        
+                // get rule control variables
+                state.liveliness = iface.livelinessControl.value/1;
+                state.heat = iface.heatControl.value/1;
+        
+                // change frequencies only if a tonal parameter has changed
+                if (new_rootnote != state.rootnote || new_multiplier != state.multiplier) {
+                    state.rootnote = new_rootnote;
+                    state.multiplier = new_multiplier;
+                    freqs = synth._generateFreqMatrix();
+                    synth._setAllFrequencies(freqs);
+                    // replace old tonal parameters with new ones, if necessary
+
+                }
+        
+                // update, play, and draw board
+                let rule = soft_conway(state.liveliness, state.heat)
+                synth.state.brd.step(rule);
+                synth.play(); 
+                iface.draw();
+            }
         }
     }
 }
 
-function index(x, y, num_rows) {
-    return (x*num_rows + y)/(num_rows**2);
-}
-
-// generate the matrix of frequencies
-// this is just an ad-hoc definition, can be changed
-function freqMatrixGenerator(num_rows, num_cols, multiplier, rootNote) {
-    let freqs = [];
-    for (x = 0; x < num_rows; x++) {
-        freqs.push([]);
-        for (y = 0; y < num_cols; y++) {
-            // truncate at max frequency allowed, 22050
-            freqs[x].push(Math.min(noteToFreq(rootNote)*(1 + (multiplier**2)*index(x,y, num_rows)/2), 22050));
-        }
-    }
-    return freqs;
-}
-
-
-function dampCurve(x, y, num_rows, factor) {
-    return (1 - index(x, y, num_rows))**factor;
-}
-
-// 'play' the board
-// this just adjusts gains for each step
-function play(brd, gains, audioCtx, damping) {
-    for (let x = 0; x < brd.rows; x++) {
-        for (let y = 0; y < brd.cols; y++) {
-            let new_vol = dampCurve(x,y, brd.rows, damping)*brd.cells[x][y].vitality;
-            // have to 'set the value to the current value' to prevent clicks
-            // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
-            gains[x][y].gain.setValueAtTime(gains[x][y].gain.value, audioCtx.currentTime);
-            gains[x][y].gain.linearRampToValueAtTime(new_vol, audioCtx.currentTime + VOL_RAMP_TIME);
-        }
-    }
-}
-
-const rootNoteControl = document.querySelector('#rootnote');
-const multiplierControl = document.querySelector('#multiplier');
-const dampingControl = document.querySelector('#damping');
-const speedControl = document.querySelector('#speed')
-const livelinessControl = document.querySelector('#liveliness');
-const heatControl = document.querySelector('#heat');
-
-async function run(rule, gainNode, audioCtx) {
-    // initialise a board and draw it
-    let brd = uniformRandom(NUM_ROWS, NUM_COLS, 0.1);
-    draw(brd);
-    // set up oscillators and corresponding gains
-    let oscsAndGains = generateOscsAndGains(NUM_ROWS, NUM_COLS, gainNode, audioCtx)
-    let oscs = oscsAndGains[0];
-    let gains = oscsAndGains[1];
-    // get initial parameters
-    let old_rootnote = rootNoteControl.value/1;
-    let old_multiplier = multiplierControl.value/1;
-    let delay;
-    let liveliness = livelinessControl.value/1;
-    // form frequency matrix
-    freqs = freqMatrixGenerator(NUM_ROWS, NUM_COLS, old_multiplier, old_rootnote);
-    // set oscillator initial frequencies
-    setAllFrequencies(oscs, freqs, audioCtx);
-
-    // main loop
-    while(true) {
-
-        // get delay parameter, and wait
-        delay = 1/speedControl.value;
-        await new Promise(r => setTimeout(r, Math.floor(delay)));
-
-        // get tonal parameter values
-        let new_rootnote = rootNoteControl.value/1;
-        let new_multiplier = multiplierControl.value/1;
-        let damping = dampingControl.value/1;
-
-        // get rule control variables
-        let liveliness = livelinessControl.value/1;
-        let heat = heatControl.value/1;
-
-        // change frequencies only if a tonal parameter has changed
-        if (new_rootnote != old_rootnote || new_multiplier != old_multiplier) {
-            freqs = freqMatrixGenerator(NUM_ROWS, NUM_COLS, new_multiplier, new_rootnote);
-            setAllFrequencies(oscs, freqs, audioCtx);
-            // replace old tonal parameters with new ones, if necessary
-            old_rootnote = new_rootnote;
-            old_multiplier = new_multiplier;
-        }
-
-        // update, play, and draw board
-        step(brd, heat, soft_conway(liveliness));
-        play(brd, gains, audioCtx, damping);        
-        draw(brd);
-    }
-}
-
-document.getElementById("start").addEventListener("click", function() {
-    let rule = soft_conway;
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    const audioCtx = new AudioContext();
-    // global gain node, to adjust volume
-    const gainNode = audioCtx.createGain();
-    gainNode.gain.value = 0.05;
-    gainNode.connect(audioCtx.destination);
-    const volumeControl = document.querySelector('#volume');
-    volumeControl.addEventListener('input', function() {
-    gainNode.gain.value = this.value;
-    }, false);
-    generateCellGrid(NUM_ROWS, NUM_COLS);
-    run(rule, gainNode, audioCtx);
-}); 
+iface = new HtmlInterface(document, GRIDSIZE);
+synth = new SynthInstance(iface, GRIDSIZE);
