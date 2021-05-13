@@ -2,10 +2,6 @@ Number.prototype.mod = function(n) {
     return ((this%n)+n)%n;
     }
 
-// debug
-var BOARDS_CREATED = 0;
-var CELLS_CREATED = 0;
-
 // grid options
 const NUM_ROWS = 16;
 const NUM_COLS = 16;
@@ -17,24 +13,13 @@ const LIVE_COLOUR = 'rgb(200, 200, 200)'
 const VOL_RAMP_TIME = 0.005;
 const FREQ_RAMP_TIME = 0.005;
 
-
-/* 
-    -----TODO-------
-   replace cell.alive with cell.vitality
-   which should be a value between 0 and 1
-   and change the corresponding step functions etc.  
-   allowing for continuous range of values
-*/
-
 /* 
     --TODO--
     change cell.toggle behaviour (left click for 1, right click for 0)
 */
 
-
 // cell constructor
 function Cell(id=undefined, vitality=0) {
-    CELLS_CREATED++;
     this.vitality = vitality;
     this.id = id; // id of div used to display cell
 
@@ -47,13 +32,23 @@ function Cell(id=undefined, vitality=0) {
         }
     }
 
+    this.element = document.getElementById(this.id);
+
     // scope issues prevent that.draw() from working
     var that = this;
 
-    this.toggle = function() {
+    // set vitality = 1 on left click
+    // and = 0 on 'right click'
+    this.element.addEventListener('click', function() {
         that.vitality = 1;
         that.draw();
-    }
+    });
+    this.element.addEventListener('contextmenu', function(ev) {
+        ev.preventDefault();
+        that.vitality = 0;
+        that.draw();
+        return false; // prevent context menu from appearing
+    }, false);
 
 }
 
@@ -79,7 +74,6 @@ function generateCellGrid(rows=16, cols=16, id) {
 // set p=0 (default) for empty board
 // defaults to 16x16
 function Board(rows=4, cols=4, p=0) {
-    BOARDS_CREATED++;
     this.rows = rows;
     this.cols = cols;
     this.cells = [];
@@ -88,7 +82,6 @@ function Board(rows=4, cols=4, p=0) {
         for (let y=0; y<cols; y++) {
             let cell = new Cell(cellId(x,y), Number(Math.random() < p));
             this.cells[x].push(cell);
-            document.getElementById(cell.id).addEventListener('click', cell.toggle);
         }
     }
 }
@@ -189,7 +182,6 @@ function draw(brd) {
         }
     }
 }
-
 
 // frequency data
 function noteToFreq(note) {
