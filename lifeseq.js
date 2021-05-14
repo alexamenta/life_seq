@@ -149,7 +149,8 @@ function HtmlInterface(document, gridSize) {
     this.document = document;
     this.gridSize = gridSize;
     this.powerControl = document.getElementById('power');
-    this.startButton = document.getElementById("start")
+    this.startButton = document.getElementById("start");
+    this.pauseButton = document.getElementById("pause");
     this.volumeControl = document.getElementById('volume');
     this.rootNoteControl = document.getElementById('rootnote');
     this.multiplierControl = document.getElementById('multiplier');
@@ -160,8 +161,7 @@ function HtmlInterface(document, gridSize) {
     this.powerLight = document.getElementById('powerlight')
 
     this.connectedBoard = undefined;
-
-
+    this.connectedSynthInstance = undefined;
 
     // generate cell grid
     for (let x=0; x < gridSize; x++) {
@@ -174,22 +174,35 @@ function HtmlInterface(document, gridSize) {
         }
     }
 
-    // add event listeners for left and right click on cell
-    // left click: vitality 1
-    // right click: vitality 0
-    this.connectBoard = function(brd) {
+    this.connectSynthInstance = function(synth) {
 
-        if (brd.gridSize != iface.gridSize) {
-            console.log("board and interface have mismatched gridsizes");
+        if (synth.gridSize != iface.gridSize) {
+            console.log("synth and interface have mismatched gridsizes");
         } else {
 
-            iface.connectedBoard = brd;
+            iface.connectedSynthInstance = synth;
 
+            // add event listeners for power, start, pause buttons
+            iface.powerControl.addEventListener('click', function() {
+                synth.on ? synth.switchOff() : synth.switchOn()
+            });
+
+            iface.startButton.addEventListener('click', function() {
+                !synth.on ? console.log("Synth is not turned on")
+                    : synth.running ? console.log("Synth is already running")
+                    : synth.run();
+            })
+
+            iface.pauseButton.addEventListener('click', function() {
+                synth.togglePause();
+            });
+
+            // add event listeners for left and right click on cell
             for (let x=0; x < this.gridSize; x++) {
                 for (let y=0; y < this.gridSize; y++) {
                     cell = iface.document.getElementById(cellId(x,y)); 
                     cell.addEventListener('click', function() {
-                        brd.cells[x][y] = 1;
+                        synth.state.brd.cells[x][y] = 1;
                         iface.draw();
                     });
                     cell.addEventListener('contextmenu', function(ev) {
@@ -204,15 +217,14 @@ function HtmlInterface(document, gridSize) {
 
     }
 
-    // draw a connected board on the HTML interface
+    // draw a connected synth's board on the HTML interface
     // should have matching grid sizes
     this.draw = function() {
 
-
-        if (!iface.connectedBoard) {
-            console.log("no connected board");
+        if (!iface.connectedSynthInstance) {
+            console.log("no connected synth instance");
         } else {
-            brd = iface.connectedBoard;
+            brd = iface.connectedSynthInstance.state.brd;
             for (let x=0; x < brd.gridSize; x++) {
                 for (let y=0; y < brd.gridSize; y++) {
                     let cellElement = document.getElementById(cellId(x,y));
@@ -229,6 +241,8 @@ function HtmlInterface(document, gridSize) {
 // an instance of life_syn
 function SynthInstance(interface, gridSize) {
 
+    this.gridSize = gridSize;
+
     this.state = {
         brd: new Board(this.gridSize, 0),
         rootNote: undefined,
@@ -239,7 +253,7 @@ function SynthInstance(interface, gridSize) {
         }
 
     this.interface = interface;
-    this.interface.connectBoard(this.state.brd);
+    this.interface.connectSynthInstance(this);
 
 
     // use when there are scope issues
@@ -247,25 +261,17 @@ function SynthInstance(interface, gridSize) {
     let state = this.state;
     let iface = this.interface;
 
-    this.gridSize = gridSize;
+
     this.audioCtx = undefined;
     this.gainNode = undefined;
     this.oscs = undefined;
     this.gains = undefined;
     this.on = false;
+    this.paused = false;
     this.rule = soft_conway; // can be remoived?
 
 
 
-    this.interface.powerControl.addEventListener('click', function() {
-        synth.on ? synth.switchOff() : synth.switchOn()
-    });
-
-    this.interface.startButton.addEventListener('click', function() {
-        !synth.on ? console.log("Synth is not turned on")
-            : synth.running? console.log("Synth is already running")
-            : synth.run();
-    })
 
 
     // generate matrix of frequencies
@@ -332,6 +338,10 @@ function SynthInstance(interface, gridSize) {
         }
     }
 
+    this.togglePause = function () {
+        synth.paused = !synth.paused;
+    }
+
     this.initialiseAudio = function() {
         // initialise audio context
         let audioCtx = new AudioContext();
@@ -395,6 +405,11 @@ function SynthInstance(interface, gridSize) {
         
             // main loop
             while(true) {
+
+                // loop here until unpaused
+                while(synth.paused) {
+                    await new Promise(r => setTimeout(r, 100));
+                }
         
                 // get delay parameter, and wait
                 state.delay = 1/iface.speedControl.value;
