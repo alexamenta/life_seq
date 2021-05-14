@@ -146,8 +146,10 @@ function generateOscsAndGains(gridSize, globalGainNode, audioCtx) {
 
 function HtmlInterface(document, gridSize) {
     let iface = this;
+    this.on = false;
     this.document = document;
     this.gridSize = gridSize;
+    this.gridArea = document.getElementById('grid-area')
     this.powerControl = document.getElementById('power');
     this.startButton = document.getElementById("start");
     this.pauseButton = document.getElementById("pause");
@@ -170,7 +172,7 @@ function HtmlInterface(document, gridSize) {
             let cell = document.createElement("div");
             cell.className = "cell";
             cell.id = cellId(x,y);
-            document.getElementById("seq-area").appendChild(cell);
+            this.gridArea.appendChild(cell);
         }
     }
 
@@ -202,19 +204,16 @@ function HtmlInterface(document, gridSize) {
                 for (let y=0; y < this.gridSize; y++) {
                     cell = iface.document.getElementById(cellId(x,y)); 
                     cell.addEventListener('click', function() {
-                        synth.state.brd.cells[x][y] = 1;
-                        iface.draw();
+                        synth.setCellValue(x, y, 1);
                     });
                     cell.addEventListener('contextmenu', function(ev) {
                         ev.preventDefault();
-                        brd.cells[x][y] = 0;
-                        iface.draw();
+                        synth.setCellValue(x, y, 0);
                         return false; // prevent context menu from appearing
                     }, false);
                 }
             }
         }
-
     }
 
     // draw a connected synth's board on the HTML interface
@@ -233,8 +232,33 @@ function HtmlInterface(document, gridSize) {
                 }
             }
         }
-
     }
+
+    this.switchOn = function() {
+        if (!iface.on) {
+            if (!iface.connectedSynthInstance) {
+                console.log("no connected synth instance");
+            } else {
+                iface.on = true;
+                iface.draw();
+                iface.powerLight.style.opacity = 1.0;
+                iface.gridArea.style.opacity = 1.0;
+            }
+        }
+    }
+
+    this.switchOff = function() {
+        if (iface.on) {
+            if (!iface.connectedSynthInstance) {
+                console.log("no connected synth instance");
+            } else {
+                iface.on = false;
+                iface.powerLight.style.opacity = 0.2;
+                iface.gridArea.style.opacity = 0.2;
+            }
+        }
+    }
+
 }
 
 
@@ -274,16 +298,20 @@ function SynthInstance(interface, gridSize) {
         synth.accessingAudio = false;
     }
 
-
     this.gainNode = undefined;
     this.oscs = undefined;
     this.gains = undefined;
     this.on = false;
     this.paused = false;
 
-
-
-
+    this.setCellValue = function(x, y, value) {
+        if (!synth.on) {
+            console.log("Synth is switched off");
+        } else {
+            synth.state.brd.cells[x][y] = value;
+            iface.draw();
+        }
+    }
 
     // generate matrix of frequencies
     // this is just an ad-hoc definition, can be changed
@@ -334,8 +362,7 @@ function SynthInstance(interface, gridSize) {
     this.switchOn = function() {
         if (!this.on) {
             this.on = true;
-            synth.interface.draw(synth.state.brd);
-            this.interface.powerLight.style.backgroundColor = "#FFFF00"
+            iface.switchOn();
             this.initialiseAudio();
         } else {
             console.log("Synth is already on");
@@ -352,8 +379,9 @@ function SynthInstance(interface, gridSize) {
             this.audioCtx.close().then(function() {
                 synth.audioCtx = undefined;
                 synth.on = false;
-                synth.interface.powerLight.style.backgroundColor = "#777700";
+                iface.switchOff();
             })
+
         } else {
             console.log("Synth is already off");
         }
