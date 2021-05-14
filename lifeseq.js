@@ -152,6 +152,7 @@ function HtmlInterface(document, gridSize) {
     this.gridArea = document.getElementById('grid-area')
     this.powerControl = document.getElementById('power');
     this.startButton = document.getElementById("start");
+    this.stopButton = document.getElementById("stop");
     this.pauseButton = document.getElementById("pause");
     this.volumeControl = document.getElementById('volume');
     this.rootNoteControl = document.getElementById('rootNote');
@@ -184,19 +185,29 @@ function HtmlInterface(document, gridSize) {
 
             iface.connectedSynthInstance = synth;
 
-            // add event listeners for power, start, pause buttons
+            // add event listeners for power, start, stop, pause buttons
             iface.powerControl.addEventListener('click', function() {
                 synth.on ? synth.switchOff() : synth.switchOn();
             });
 
             iface.startButton.addEventListener('click', function() {
                 !synth.on ? console.log("Synth is not turned on")
-                    : synth.running ? console.log("Synth is already running")
                     : synth.run();
+            })
+
+            iface.stopButton.addEventListener('click', function() {
+                !synth.on ? console.log("Synth is not turned on")
+                    : synth.stop();
             })
 
             iface.pauseButton.addEventListener('click', function() {
                 synth.togglePause();
+
+                if (iface.pauseButton.className !== 'toggled') {
+                    iface.pauseButton.className = 'toggled';
+                } else {
+                    iface.pauseButton.className = '';   
+                }
             });
 
             // add event listeners for left and right click on cell
@@ -235,6 +246,7 @@ function HtmlInterface(document, gridSize) {
     }
 
     this.switchOn = function() {
+        // add erorr message
         if (!iface.on) {
             if (!iface.connectedSynthInstance) {
                 console.log("no connected synth instance");
@@ -248,6 +260,7 @@ function HtmlInterface(document, gridSize) {
     }
 
     this.switchOff = function() {
+        // add error message
         if (iface.on) {
             if (!iface.connectedSynthInstance) {
                 console.log("no connected synth instance");
@@ -302,6 +315,7 @@ function SynthInstance(interface, gridSize) {
     this.oscs = undefined;
     this.gains = undefined;
     this.on = false;
+    this.running = false;
     this.paused = false;
 
     this.setCellValue = function(x, y, value) {
@@ -372,6 +386,8 @@ function SynthInstance(interface, gridSize) {
     this.switchOff = function() {
         if (this.on) {
             
+            synth.stop();
+
             while (synth.accessingAudio) {
             // wait until audio context isn't being accessed before switching it off
             }
@@ -436,73 +452,83 @@ function SynthInstance(interface, gridSize) {
         }
     }
 
+
     // run the synth!
     this.run = async function() {
-        
-        if (synth._readyToPlay) {
-            state = synth.state;
-            iface = synth.interface;
+        if (synth.running) {
+            console.log("synth is already running");
+        } else {
+            if (synth._readyToPlay) {
+                state = synth.state;
+                iface = synth.interface;
 
-            // get initial parameters
-            state.rootNote = iface.rootNoteControl.value/1;
-            state.multiplier = iface.multiplierControl.value/1;
-            state.liveliness = iface.livelinessControl.value/1;
+                synth.running = true;
 
-            // form frequency matrix
-            freqs = synth._generateFreqMatrix();
-            // set oscillator initial frequencies
-            synth._setAllFrequencies(freqs);
-        
-            // main loop
-            while(true) {
-                
-                // exit main loop if the synth has been turned off
-                if (!synth.on) {
-                    break;
-                }
-
-                // loop here until unpaused
-                while (synth.paused) {
-                    await new Promise(r => setTimeout(r, 100));
-                }
-        
-                // get delay parameter, and wait
-                state.delay = 1/iface.speedControl.value;
-                await new Promise(r => setTimeout(r, Math.floor(state.delay)));
-        
-                // get tonal parameter values
-                // we check whether the root note or multiplier has changed
-                // so we can avoid generating new freq matrix unless we need it
-                let new_rootNote = iface.rootNoteControl.value/1;
-                let new_multiplier = iface.multiplierControl.value/1;
-                state.damping = iface.dampingControl.value/1;
-        
-                // get rule control variables
+                // get initial parameters
+                state.rootNote = iface.rootNoteControl.value/1;
+                state.multiplier = iface.multiplierControl.value/1;
                 state.liveliness = iface.livelinessControl.value/1;
-                state.heat = iface.heatControl.value/1;
-        
-                // change frequencies only if a tonal parameter has changed
-                if (new_rootNote != state.rootNote || new_multiplier != state.multiplier) {
-                    state.rootNote = new_rootNote;
-                    state.multiplier = new_multiplier;
-                    freqs = synth._generateFreqMatrix();
-                    synth._setAllFrequencies(freqs);
-                    // replace old tonal parameters with new ones, if necessary
 
-                }
+                // form frequency matrix
+                freqs = synth._generateFreqMatrix();
+                // set oscillator initial frequencies
+                synth._setAllFrequencies(freqs);
+            
+                // main loop
+                while(synth.running) {
+                    
+                    // exit main loop if the synth has been turned off
+                    if (!synth.on) {break;}
 
-                // exit main loop if the synth has been turned off
-                // this appears twice and seems really hacky
-                // what's the best practice?
-                if (!synth.on) {
-                    break;
+                    // loop here until unpaused
+                    while (synth.paused) {
+                        await new Promise(r => setTimeout(r, 100));
+                    }
+            
+                    // get delay parameter, and wait
+                    state.delay = 1/iface.speedControl.value;
+                    await new Promise(r => setTimeout(r, Math.floor(state.delay)));
+            
+                    // get tonal parameter values
+                    // we check whether the root note or multiplier has changed
+                    // so we can avoid generating new freq matrix unless we need it
+                    let new_rootNote = iface.rootNoteControl.value/1;
+                    let new_multiplier = iface.multiplierControl.value/1;
+                    state.damping = iface.dampingControl.value/1;
+            
+                    // get rule control variables
+                    state.liveliness = iface.livelinessControl.value/1;
+                    state.heat = iface.heatControl.value/1;
+            
+                    // change frequencies only if a tonal parameter has changed
+                    if (new_rootNote != state.rootNote || new_multiplier != state.multiplier) {
+                        state.rootNote = new_rootNote;
+                        state.multiplier = new_multiplier;
+                        freqs = synth._generateFreqMatrix();
+                        synth._setAllFrequencies(freqs);
+                        // replace old tonal parameters with new ones, if necessary
+
+                    }
+
+                    // exit main loop if the synth has been turned off
+                    // this appears twice and seems really hacky
+                    // what's the best practice?
+                    if (!synth.on) {break;}
+            
+                    // update, play, and draw board
+                    synth.state.brd.step(soft_conway(state.liveliness, state.heat));
+                    synth.play(); 
+                    iface.draw();
                 }
-        
-                // update, play, and draw board
-                synth.state.brd.step(soft_conway(state.liveliness, state.heat));
-                synth.play(); 
-                iface.draw();
             }
+        }
+    }
+
+    this.stop = function() {
+        if (!synth.running) {
+            console.log("synth is not running");
+        } else {
+            synth.running = false;
         }
     }
 }

@@ -9,6 +9,12 @@
                 background: #000000;
                 color: #FFFFFF;
             }
+            button {
+                background-color: #4d4d4d;
+            }
+            button.toggled {
+                background-color: #621515;
+            }
             .mainbox {
                 display: grid;
                 grid-template-columns: auto auto;
@@ -16,7 +22,7 @@
                 top: 0%;
                 left: 0%;
             }
-            .panel {
+            .panel { 
                 background-color: #220022;
             }
             .lifegrid {
@@ -77,6 +83,7 @@
 
                 <button id="power">power</button>
                 <button id="start">start</button>
+                <button id="stop">stop</button>
                 <button id="pause">pause</button><br>
 
                 <div class="powerlight" id="powerlight">this is the power light</div>
