@@ -464,6 +464,10 @@ function SynthInstance(interface, gridSize) {
 
                 synth.running = true;
 
+                // set initial gain (useful when the synth has been previously stopped)
+                synth.gainNode.gain.setValueAtTime(synth.gainNode.gain.value, synth.audioCtx.currentTime);
+                synth.gainNode.gain.linearRampToValueAtTime(iface.volumeControl.value/1, synth.audioCtx.currentTime + VOL_RAMP_TIME);
+
                 // get initial parameters
                 state.rootNote = iface.rootNoteControl.value/1;
                 state.multiplier = iface.multiplierControl.value/1;
@@ -529,6 +533,8 @@ function SynthInstance(interface, gridSize) {
             console.log("synth is not running");
         } else {
             synth.running = false;
+            synth.gainNode.gain.setValueAtTime(synth.gainNode.gain.value, synth.audioCtx.currentTime);
+            synth.gainNode.gain.linearRampToValueAtTime(0, synth.audioCtx.currentTime + VOL_RAMP_TIME);
         }
     }
 }
