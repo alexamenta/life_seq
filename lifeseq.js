@@ -171,7 +171,7 @@ function HtmlInterface(document, gridSize) {
     this.speedControl = document.getElementById('speed')
     this.livelinessControl = document.getElementById('liveliness');
     this.heatControl = document.getElementById('heat');
-    this.powerLight = document.getElementById('powerlight');
+    this.powerLight = document.getElementById('powerLight');
     this.ticker = document.getElementById('ticker');
 
     this.connectedBoard = undefined;
@@ -236,7 +236,8 @@ function HtmlInterface(document, gridSize) {
             iface.gliderButton.addEventListener('click', function() {
                 if (synth.on) {
                     synth.resetToGlider();
-                    iface.draw();}
+                    iface.draw();
+                }
             })
 
             iface.presetButtons[0].addEventListener('click', function() {
