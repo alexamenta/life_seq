@@ -149,7 +149,7 @@ function HtmlInterface(document, gridSize) {
     this.on = false;
     this.document = document;
     this.gridSize = gridSize;
-    this.gridArea = document.getElementById('grid-area')
+    this.gridArea = document.getElementById('grid-area');
     this.powerControl = document.getElementById('power');
     this.startButton = document.getElementById("start");
     this.stopButton = document.getElementById("stop");
@@ -161,7 +161,8 @@ function HtmlInterface(document, gridSize) {
     this.speedControl = document.getElementById('speed')
     this.livelinessControl = document.getElementById('liveliness');
     this.heatControl = document.getElementById('heat');
-    this.powerLight = document.getElementById('powerlight')
+    this.powerLight = document.getElementById('powerlight');
+    this.ticker = document.getElementById('ticker');
 
     this.connectedBoard = undefined;
     this.connectedSynthInstance = undefined;
@@ -202,12 +203,7 @@ function HtmlInterface(document, gridSize) {
 
             iface.pauseButton.addEventListener('click', function() {
                 synth.togglePause();
-
-                if (iface.pauseButton.className !== 'toggled') {
-                    iface.pauseButton.className = 'toggled';
-                } else {
-                    iface.pauseButton.className = '';   
-                }
+                iface.pauseButton.classList.toggle("toggled");
             });
 
             // add event listeners for left and right click on cell
@@ -272,6 +268,49 @@ function HtmlInterface(document, gridSize) {
         }
     }
 
+    // what to do when tick from clock is received
+    this.receiveTick = function() {
+        console.log('interface tick');
+        iface.ticker.classList.toggle("on");
+    }
+
+}
+
+// delay: clock delay time in ms
+function Clock(delay, listeners=[]) {
+    let clock = this;
+    this.delay = delay;
+    this.listeners = listeners;
+
+    this.running = false;
+
+    this.addListener = function(listener) {
+        clock.listeners.push(listener);
+    }
+
+    // broadcast tick message to all listeners
+    this.tick = function() {
+        for (i = 0; i < listeners.length; i++) {
+            listeners[i].receiveTick();
+        }
+    }
+
+    // start clock
+    this.start = async function() {
+        clock.running = true;
+        while (true) {
+            clock.tick();
+            if (!clock.running) {break;}
+            await new Promise(r => setTimeout(r, clock.delay));
+            if (!clock.running) {break;}
+        }
+    }
+
+    // stop clock
+    this.stop = function() {
+        clock.running = false;
+    }
+
 }
 
 
@@ -292,12 +331,14 @@ function SynthInstance(interface, gridSize) {
     this.interface = interface;
     this.interface.connectSynthInstance(this);
 
+    this.clock = new Clock(1000); // change speed later!
+    this.clock.addListener(this.interface);
 
     // use when there are scope issues
     let synth = this;
     let state = this.state;
     let iface = this.interface;
-
+    let clock = this.clock;
 
     this.audioCtx = undefined;
 
@@ -432,6 +473,10 @@ function SynthInstance(interface, gridSize) {
         )
     }
 
+    this.receiveTick = function() {
+        // do something depending on synth status
+    }
+
     // play the current board
     this.play = function() {
 
@@ -539,5 +584,12 @@ function SynthInstance(interface, gridSize) {
     }
 }
 
+
+
 iface = new HtmlInterface(document, GRIDSIZE);
 synth = new SynthInstance(iface, GRIDSIZE);
+
+clockButton = document.getElementById('clock');
+clockButton.addEventListener('click', function() {
+    synth.clock.start();
+})
