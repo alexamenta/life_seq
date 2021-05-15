@@ -11,9 +11,6 @@ Number.prototype.mod = function(n) {
     return ((this%n)+n)%n;
     }
 
-
-
-
 function cellId(x,y) {
         return "cell:" + x + "," + y;
     }
@@ -59,18 +56,34 @@ function soft_conway(liveliness, heat) {
     }
 }
 
+// generate 0/1 valued grid, probability p of full life
+function randomCells(gridSize, p) {
+    let cells = [];
+    for (let x=0; x < gridSize; x++) {
+        cells.push([]);
+        for (let y=0; y < gridSize; y++) {
+            if (p == 0) {
+                cells[x].push(0);
+            } else {
+                cells[x].push(Number(Math.random() < p));
+            }
+        }
+    }
+    return cells;
+}
+
+function gliderCells(gridSize) {
+    let cells = randomCells(gridSize, 0);
+    cells[0][1] = cells[1][0] = cells[2][0] = cells[2][1] = cells[2][2] = 1;
+    return cells;
+}
+
 // board constructor: random board with probability p of life.
 // set p=0 (default) for empty board
 function Board(gridSize=16, p=0) {
     let brd = this;
     this.gridSize = gridSize;
-    this.cells = [];
-    for (let x=0; x<gridSize; x++) {
-        this.cells.push([]); 
-        for (let y=0; y<gridSize; y++) {
-            this.cells[x].push(Number(Math.random() < p));
-        }
-    }
+    this.cells = randomCells(gridSize, p);
 
     // apply given rule to the new board
     // heat controls random fluctuations
@@ -103,18 +116,6 @@ function Board(gridSize=16, p=0) {
     }
 }
 
-// initialise a glider
-// defaults to 16x16 board
-// should have gridsize >= 3
-function createGliderBoard(gridSize=16) {
-    let board = new Board(rows, cols);
-    board.cells[0][1] = 1;
-    board.cells[1][0] = 1;
-    board.cells[2][0] = 1;
-    board.cells[2][1] = 1;
-    board.cells[2][2] = 1;
-    return board;
-}
 
 
 // generates oscillator and gain node matrices
@@ -150,10 +151,19 @@ function HtmlInterface(document, gridSize) {
     this.document = document;
     this.gridSize = gridSize;
     this.gridArea = document.getElementById('grid-area');
+
     this.powerControl = document.getElementById('power');
     this.startButton = document.getElementById("start");
     this.stopButton = document.getElementById("stop");
     this.pauseButton = document.getElementById("pause");
+    this.clearButton = document.getElementById("clear");
+    this.randomButton = document.getElementById("random");
+    this.gliderButton = document.getElementById("glider");
+
+    this.presetButtons = [
+        document.getElementById("preset0")
+    ];
+
     this.volumeControl = document.getElementById('volume');
     this.rootNoteControl = document.getElementById('rootNote');
     this.multiplierControl = document.getElementById('multiplier');
@@ -186,7 +196,7 @@ function HtmlInterface(document, gridSize) {
 
             iface.connectedSynthInstance = synth;
 
-            // add event listeners for power, start, stop, pause buttons
+            // add event listeners for buttons
             iface.powerControl.addEventListener('click', function() {
                 synth.on ? synth.switchOff() : synth.switchOn();
             });
@@ -208,6 +218,33 @@ function HtmlInterface(document, gridSize) {
                     iface.pauseButton.classList.add("toggled");
                 }
             });
+
+            iface.clearButton.addEventListener('click', function() {
+                if (synth.on) {
+                    synth.randomiseCells(0);
+                    iface.draw();
+                }
+            })
+
+            iface.randomButton.addEventListener('click', function() {
+                if (synth.on) {
+                    synth.randomiseCells();
+                    iface.draw();
+                }
+            })
+
+            iface.gliderButton.addEventListener('click', function() {
+                if (synth.on) {
+                    synth.resetToGlider();
+                    iface.draw();}
+            })
+
+            iface.presetButtons[0].addEventListener('click', function() {
+                if (synth.on) {
+                    synth.loadPreset(presets.chatter);
+                }
+            })
+            
 
             // add event listeners for left and right click on cell
             for (let x=0; x < this.gridSize; x++) {
@@ -278,6 +315,28 @@ function HtmlInterface(document, gridSize) {
         iface.draw();
     }
 
+    // set interface values to those stored in synth state
+    // used when loading presents
+    this.setToSynthParameters = function() {
+
+        if (!iface.connectedSynthInstance) {
+            console.log("no connected synth instance");
+        } else {
+            // board state has possibly changed, so redraw the board
+            iface.draw();
+
+            // set the controls
+            state = iface.connectedSynthInstance.state;
+            iface.rootNoteControl.value = state.rootNote;
+            iface.multiplierControl.value = state.multiplierControl;
+            iface.dampingControl.value = state.damping;
+            iface.livelinessControl.value = state.liveliness;
+            iface.heatControl.value = state.heat;
+            iface.speedControl.value = 1/state.delay;
+        }
+
+    }
+
 }
 
 // delay: clock delay time in ms
@@ -332,8 +391,9 @@ function SynthInstance(interface, gridSize) {
         rootNote: undefined,
         multiplier: undefined,
         damping: undefined,
-        delay: undefined,
-        liveliness: undefined
+        liveliness: undefined,
+        heat: undefined,
+        delay: undefined
         }
 
     this.interface = interface;
@@ -556,6 +616,33 @@ function SynthInstance(interface, gridSize) {
             synth.gainNode.gain.linearRampToValueAtTime(0, synth.audioCtx.currentTime + VOL_RAMP_TIME);
         }
     }
+
+    this.loadPreset = function(preset) {
+        // copy over properties from preset
+        synth.state = Object.assign(synth.state, preset);
+        interface.setToSynthParameters(); 
+    }
+
+    this.randomiseCells = function(p=0.5) {
+        synth.state.brd.cells = randomCells(synth.gridSize, p);
+    }
+
+    this.resetToGlider = function() {
+        synth.state.brd.cells = gliderCells(synth.gridSize);
+    }
+}
+
+
+
+presets = {
+    chatter: {
+        damping: 10,
+        delay: 80,
+        heat: 0.17,
+        liveliness: 2.87,
+        multiplier: 6.75,
+        rootNote: 66
+    },
 }
 
 
