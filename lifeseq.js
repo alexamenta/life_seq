@@ -192,18 +192,21 @@ function HtmlInterface(document, gridSize) {
             });
 
             iface.startButton.addEventListener('click', function() {
-                !synth.on ? console.log("Synth is not turned on")
-                    : synth.run();
+                synth.run();
+                iface.pauseButton.classList.remove("toggled");
             })
 
             iface.stopButton.addEventListener('click', function() {
-                !synth.on ? console.log("Synth is not turned on")
-                    : synth.stop();
+                synth.stop();
+                iface.pauseButton.classList.remove("toggled");
             })
 
             iface.pauseButton.addEventListener('click', function() {
-                synth.togglePause();
-                iface.pauseButton.classList.toggle("toggled");
+                // do nothing if the synth is already paused
+                if (!synth.paused) {
+                    synth.pause();
+                    iface.pauseButton.classList.add("toggled");
+                }
             });
 
             // add event listeners for left and right click on cell
@@ -452,9 +455,11 @@ function SynthInstance(interface, gridSize) {
         }
     }
 
-    this.togglePause = function () {
-        synth.paused = !synth.paused;
-        synth.clock.toggle();
+    this.pause = function () {
+        if (!synth.paused) {
+            synth.paused = true;
+            if (synth.clock) {synth.clock.stop();}
+        }
     }
 
     this.initialiseAudio = function() {
@@ -533,17 +538,18 @@ function SynthInstance(interface, gridSize) {
 
     // run the synth!
     this.run = function() {
-        if (synth.running) {console.log("synth is already running");} 
-        else {
+        synth.paused = false;
+        if (synth.on) {
             synth.running = true;
-            synth.clock.start();
+            if (!synth.clock.running) {
+                synth.clock.start();
+            }
         }
     }
 
     this.stop = function() {
-        if (!synth.running) {
-            console.log("synth is not running");
-        } else {
+        synth.paused = false;
+        if (synth.running) {
             synth.running = false;
             synth.clock.stop();
             synth.gainNode.gain.setValueAtTime(synth.gainNode.gain.value, synth.audioCtx.currentTime);
