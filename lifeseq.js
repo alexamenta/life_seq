@@ -249,8 +249,8 @@ function HtmlInterface(document, gridSize) {
             } else {
                 iface.on = true;
                 iface.draw();
-                iface.powerLight.style.opacity = 1.0;
-                iface.gridArea.style.opacity = 1.0;
+                iface.powerLight.classList.add("on");
+                iface.gridArea.classList.add("on");
             }
         }
     }
@@ -262,16 +262,17 @@ function HtmlInterface(document, gridSize) {
                 console.log("no connected synth instance");
             } else {
                 iface.on = false;
-                iface.powerLight.style.opacity = 0.2;
-                iface.gridArea.style.opacity = 0.2;
+                iface.powerLight.classList.remove("on");
+                iface.gridArea.classList.remove("on");
+                iface.ticker.classList.remove("on");
             }
         }
     }
 
     // what to do when tick from clock is received
     this.receiveTick = function() {
-        console.log('interface tick');
         iface.ticker.classList.toggle("on");
+        iface.draw();
     }
 
 }
@@ -311,6 +312,10 @@ function Clock(delay, listeners=[]) {
         clock.running = false;
     }
 
+    this.toggle = function() {
+        clock.running ? clock.stop() : clock.start();
+    }
+
 }
 
 
@@ -331,14 +336,12 @@ function SynthInstance(interface, gridSize) {
     this.interface = interface;
     this.interface.connectSynthInstance(this);
 
-    this.clock = new Clock(1000); // change speed later!
-    this.clock.addListener(this.interface);
+    this.clock = undefined; 
 
     // use when there are scope issues
     let synth = this;
     let state = this.state;
     let iface = this.interface;
-    let clock = this.clock;
 
     this.audioCtx = undefined;
 
@@ -419,6 +422,11 @@ function SynthInstance(interface, gridSize) {
             this.on = true;
             iface.switchOn();
             this.initialiseAudio();
+            this.getParameters();
+            // initialise clock
+            synth.clock = new Clock(state.delay);
+            synth.clock.addListener(synth);
+            synth.clock.addListener(iface);
         } else {
             console.log("Synth is already on");
         }
@@ -446,6 +454,7 @@ function SynthInstance(interface, gridSize) {
 
     this.togglePause = function () {
         synth.paused = !synth.paused;
+        synth.clock.toggle();
     }
 
     this.initialiseAudio = function() {
@@ -473,8 +482,33 @@ function SynthInstance(interface, gridSize) {
         )
     }
 
+    this.getParameters = function() {
+        if (synth.audioCtx) {
+            synth.gainNode.gain.setValueAtTime(synth.gainNode.gain.value, synth.audioCtx.currentTime);
+            synth.gainNode.gain.linearRampToValueAtTime(iface.volumeControl.value/1, synth.audioCtx.currentTime + VOL_RAMP_TIME);
+    
+            // get initial parameters
+            state.rootNote = iface.rootNoteControl.value/1;
+            state.multiplier = iface.multiplierControl.value/1;
+            state.liveliness = iface.livelinessControl.value/1;
+            state.damping = iface.dampingControl.value/1;
+            state.heat = iface.heatControl.value/1;
+            state.delay = 1/iface.speedControl.value;
+    
+            // form frequency matrix
+            freqs = synth._generateFreqMatrix();
+            // set oscillator initial frequencies
+            synth._setAllFrequencies(freqs);
+        }
+    }
+
     this.receiveTick = function() {
-        // do something depending on synth status
+        // update and play board
+        // interface handles the drawing
+        synth.state.brd.step(soft_conway(state.liveliness, state.heat));
+        synth.getParameters();
+        synth.clock.delay = state.delay;
+        synth.play();
     }
 
     // play the current board
@@ -497,79 +531,12 @@ function SynthInstance(interface, gridSize) {
         }
     }
 
-
     // run the synth!
-    this.run = async function() {
-        if (synth.running) {
-            console.log("synth is already running");
-        } else {
-            if (synth._readyToPlay) {
-                state = synth.state;
-                iface = synth.interface;
-
-                synth.running = true;
-
-                // set initial gain (useful when the synth has been previously stopped)
-                synth.gainNode.gain.setValueAtTime(synth.gainNode.gain.value, synth.audioCtx.currentTime);
-                synth.gainNode.gain.linearRampToValueAtTime(iface.volumeControl.value/1, synth.audioCtx.currentTime + VOL_RAMP_TIME);
-
-                // get initial parameters
-                state.rootNote = iface.rootNoteControl.value/1;
-                state.multiplier = iface.multiplierControl.value/1;
-                state.liveliness = iface.livelinessControl.value/1;
-
-                // form frequency matrix
-                freqs = synth._generateFreqMatrix();
-                // set oscillator initial frequencies
-                synth._setAllFrequencies(freqs);
-            
-                // main loop
-                while(synth.running) {
-                    
-                    // exit main loop if the synth has been turned off
-                    if (!synth.on) {break;}
-
-                    // loop here until unpaused
-                    while (synth.paused) {
-                        await new Promise(r => setTimeout(r, 100));
-                    }
-            
-                    // get delay parameter, and wait
-                    state.delay = 1/iface.speedControl.value;
-                    await new Promise(r => setTimeout(r, Math.floor(state.delay)));
-            
-                    // get tonal parameter values
-                    // we check whether the root note or multiplier has changed
-                    // so we can avoid generating new freq matrix unless we need it
-                    let new_rootNote = iface.rootNoteControl.value/1;
-                    let new_multiplier = iface.multiplierControl.value/1;
-                    state.damping = iface.dampingControl.value/1;
-            
-                    // get rule control variables
-                    state.liveliness = iface.livelinessControl.value/1;
-                    state.heat = iface.heatControl.value/1;
-            
-                    // change frequencies only if a tonal parameter has changed
-                    if (new_rootNote != state.rootNote || new_multiplier != state.multiplier) {
-                        state.rootNote = new_rootNote;
-                        state.multiplier = new_multiplier;
-                        freqs = synth._generateFreqMatrix();
-                        synth._setAllFrequencies(freqs);
-                        // replace old tonal parameters with new ones, if necessary
-
-                    }
-
-                    // exit main loop if the synth has been turned off
-                    // this appears twice and seems really hacky
-                    // what's the best practice?
-                    if (!synth.on) {break;}
-            
-                    // update, play, and draw board
-                    synth.state.brd.step(soft_conway(state.liveliness, state.heat));
-                    synth.play(); 
-                    iface.draw();
-                }
-            }
+    this.run = function() {
+        if (synth.running) {console.log("synth is already running");} 
+        else {
+            synth.running = true;
+            synth.clock.start();
         }
     }
 
@@ -578,6 +545,7 @@ function SynthInstance(interface, gridSize) {
             console.log("synth is not running");
         } else {
             synth.running = false;
+            synth.clock.stop();
             synth.gainNode.gain.setValueAtTime(synth.gainNode.gain.value, synth.audioCtx.currentTime);
             synth.gainNode.gain.linearRampToValueAtTime(0, synth.audioCtx.currentTime + VOL_RAMP_TIME);
         }
@@ -588,8 +556,3 @@ function SynthInstance(interface, gridSize) {
 
 iface = new HtmlInterface(document, GRIDSIZE);
 synth = new SynthInstance(iface, GRIDSIZE);
-
-clockButton = document.getElementById('clock');
-clockButton.addEventListener('click', function() {
-    synth.clock.start();
-})
