@@ -80,38 +80,38 @@ function gliderCells(gridSize) {
 
 // board constructor: random board with probability p of life.
 // set p=0 (default) for empty board
-function Board(gridSize=16, p=0) {
-    let brd = this;
-    this.gridSize = gridSize;
-    this.cells = randomCells(gridSize, p);
+class Board {
+    constructor(gridSize=16, p=0) {
+        this.gridSize = gridSize;
+        this.cells = randomCells(gridSize, p);
+    }
 
     // apply given rule to the new board
-    // heat controls random fluctuations
-    this.step = function(rule) {
+    step(rule) {
 
         // create array to construct the new state (w/o constructing a new board)
         let new_state = [];
 
         // compute new state
-        for (let x=0; x<brd.gridSize; x++) {
+        for (let x=0; x<this.gridSize; x++) {
             new_state.push([]);
-            for (let y=0; y<brd.gridSize; y++) {
+            for (let y=0; y<this.gridSize; y++) {
                 // count number of live neighbours
                 let nbr_vitality = 0;
                 for (let dx = -1; dx <= 1; dx++) {
                     for (let dy = -1; dy <= 1; dy++) {
                         if (dx != 0 || dy != 0) {
-                            nbr_vitality += brd.cells[(x + dx).mod(brd.gridSize)][(y + dy).mod(brd.gridSize)];
+                            nbr_vitality += this.cells[(x + dx).mod(this.gridSize)][(y + dy).mod(this.gridSize)];
                         }
                     }
                 }
 
-                let cell_vitality = brd.cells[x][y];
+                let cell_vitality = this.cells[x][y];
                 new_state[x].push(rule(nbr_vitality, cell_vitality));
             }
         }
 
-        brd.cells = new_state;
+        this.cells = new_state;
 
     }
 }
@@ -145,118 +145,170 @@ function generateOscsAndGains(gridSize, globalGainNode, audioCtx) {
 
 
 
-function HtmlInterface(document, gridSize) {
-    let iface = this;
-    this.on = false;
-    this.document = document;
-    this.gridSize = gridSize;
-    this.gridArea = document.getElementById('grid-area');
+class HtmlInterface {
 
-    this.powerControl = document.getElementById('power');
-    this.startButton = document.getElementById("start");
-    this.stopButton = document.getElementById("stop");
-    this.pauseButton = document.getElementById("pause");
-    this.clearButton = document.getElementById("clear");
-    this.randomButton = document.getElementById("random");
-    this.gliderButton = document.getElementById("glider");
+    constructor(document, gridSize) {
+        this.on = false;
+        this.document = document;
+        this.gridSize = gridSize;
+        this.gridArea = document.getElementById('grid-area');
 
-    this.presetButtons = [
-        document.getElementById("preset0")
-    ];
+        this.powerControl = document.getElementById('power');
+        this.startButton = document.getElementById("start");
+        this.stopButton = document.getElementById("stop");
+        this.pauseButton = document.getElementById("pause");
+        this.clearButton = document.getElementById("clear");
+        this.randomButton = document.getElementById("random");
+        this.gliderButton = document.getElementById("glider");
 
-    this.volumeControl = document.getElementById('volume');
-    this.rootNoteControl = document.getElementById('rootNote');
-    this.multiplierControl = document.getElementById('multiplier');
-    this.dampingControl = document.getElementById('damping');
-    this.speedControl = document.getElementById('speed')
-    this.livelinessControl = document.getElementById('liveliness');
-    this.heatControl = document.getElementById('heat');
-    this.powerLight = document.getElementById('powerLight');
-    this.ticker = document.getElementById('ticker');
+        this.presetButtons = [
+            document.getElementById("preset0")
+        ];
 
-    this.connectedBoard = undefined;
-    this.connectedSynthInstance = undefined;
+        this.volumeControl = document.getElementById('volume');
+        this.rootNoteControl = document.getElementById('rootNote');
+        this.multiplierControl = document.getElementById('multiplier');
+        this.dampingControl = document.getElementById('damping');
+        this.speedControl = document.getElementById('speed')
+        this.livelinessControl = document.getElementById('liveliness');
+        this.heatControl = document.getElementById('heat');
+        this.powerLight = document.getElementById('powerLight');
+        this.ticker = document.getElementById('ticker');
 
-    // generate cell grid
-    for (let x=0; x < gridSize; x++) {
-        for (let y=0; y < gridSize; y++) {
-            // place cell element in sequencer area
-            let cell = document.createElement("div");
-            cell.className = "cell";
-            cell.id = cellId(x,y);
-            this.gridArea.appendChild(cell);
+        this.connectedBoard = undefined;
+        this.connectedSynthInstance = undefined;
+
+        // generate cell grid
+        for (let x=0; x < gridSize; x++) {
+            for (let y=0; y < gridSize; y++) {
+                // place cell element in sequencer area
+                let cell = document.createElement("div");
+                cell.className = "cell";
+                cell.id = cellId(x,y);
+                this.gridArea.appendChild(cell);
+            }
         }
     }
 
-    this.connectSynthInstance = function(synth) {
+    clickPowerControl() {
+        let synth = this.connectedSynthInstance;
+        if (synth) {
+            synth.on ? synth.switchOff() : synth.switchOn();
+        }
+    }
 
-        if (synth.gridSize != iface.gridSize) {
+    clickStartButton() {
+        let synth = this.connectedSynthInstance;
+        if (synth) {
+            synth.run();
+            this.pauseButton.classList.remove("toggled");
+        }
+    }
+
+    clickStopButton() {
+        let synth = this.connectedSynthInstance;
+        if (synth) {
+            synth.stop();
+            this.pauseButton.classList.remove("toggled");
+        }
+    }
+
+    clickPauseButton() {
+        let synth = this.connectedSynthInstance;
+        if (synth) {
+            // do nothing if the synth is already paused
+            if (!synth.paused) {
+                synth.pause();
+                this.pauseButton.classList.add("toggled");
+            }
+        }
+    }
+
+    clickClearButton() {
+        let synth = this.connectedSynthInstance;
+        if (synth) {
+            if (synth.on) {
+                synth.randomiseCells(0);
+                this.draw();
+            }
+        }
+    }
+
+    clickRandomButton() {
+        let synth = this.connectedSynthInstance;
+        if (synth) {
+            if (synth.on) {
+                synth.randomiseCells();
+                this.draw();
+            }
+        }
+    }
+
+    clickGliderButton() {
+        let synth = this.connectedSynthInstance;
+        if (synth) {
+            if (synth.on) {
+                synth.resetToGlider();
+                this.draw();
+            }
+        }
+    }
+
+    clickPresetButton(n) {
+        let synth = this.connectedSynthInstance;
+        if (synth) {
+            if (synth.on) {
+                // modify this later to allow for more presents
+                synth.loadPreset(presets.chatter);
+            }
+        }
+    }
+
+    leftClickCell(x,y) {
+        let synth = this.connectedSynthInstance;
+        if (synth) {
+            synth.setCellValue(x, y, 1);
+        }
+    }
+
+    rightClickCell(x,y) {
+        let synth = this.connectedSynthInstance;
+        if (synth) {
+            
+        }
+    }
+
+    connectSynthInstance(synth) {
+
+        if (synth.gridSize != this.gridSize) {
             console.log("synth and interface have mismatched gridsizes");
         } else {
 
-            iface.connectedSynthInstance = synth;
+            this.connectedSynthInstance = synth;
 
             // add event listeners for buttons
-            iface.powerControl.addEventListener('click', function() {
-                synth.on ? synth.switchOff() : synth.switchOn();
-            });
-
-            iface.startButton.addEventListener('click', function() {
-                synth.run();
-                iface.pauseButton.classList.remove("toggled");
-            })
-
-            iface.stopButton.addEventListener('click', function() {
-                synth.stop();
-                iface.pauseButton.classList.remove("toggled");
-            })
-
-            iface.pauseButton.addEventListener('click', function() {
-                // do nothing if the synth is already paused
-                if (!synth.paused) {
-                    synth.pause();
-                    iface.pauseButton.classList.add("toggled");
-                }
-            });
-
-            iface.clearButton.addEventListener('click', function() {
-                if (synth.on) {
-                    synth.randomiseCells(0);
-                    iface.draw();
-                }
-            })
-
-            iface.randomButton.addEventListener('click', function() {
-                if (synth.on) {
-                    synth.randomiseCells();
-                    iface.draw();
-                }
-            })
-
-            iface.gliderButton.addEventListener('click', function() {
-                if (synth.on) {
-                    synth.resetToGlider();
-                    iface.draw();
-                }
-            })
-
-            iface.presetButtons[0].addEventListener('click', function() {
-                if (synth.on) {
-                    synth.loadPreset(presets.chatter);
-                }
-            })
+            // arrow functions are used to avoid scope issues
+            // (so 'this' refers to the object, not the button)
+            // see https://stackoverflow.com/questions/43727516/javascript-how-adding-event-handler-inside-a-class-with-a-class-method-as-the-c
+            this.powerControl.addEventListener('click', () => this.clickPowerControl());
+            this.startButton.addEventListener('click', () => this.clickStartButton());
+            this.stopButton.addEventListener('click', () => this.clickStopButton());
+            this.pauseButton.addEventListener('click', () => this.clickPauseButton());
+            this.clearButton.addEventListener('click', () => this.clickClearButton());
+            this.randomButton.addEventListener('click', () => this.clickRandomButton());
+            this.gliderButton.addEventListener('click', () => this.clickGliderButton());
+            // modify this to have more than one preset later
+            this.presetButtons[0].addEventListener('click', () => this.clickPresetButton(0));
             
 
             // add event listeners for left and right click on cell
             for (let x=0; x < this.gridSize; x++) {
                 for (let y=0; y < this.gridSize; y++) {
-                    cell = iface.document.getElementById(cellId(x,y)); 
-                    cell.addEventListener('click', function() {
-                        synth.setCellValue(x, y, 1);
-                    });
-                    cell.addEventListener('contextmenu', function(ev) {
+                    let cell = this.document.getElementById(cellId(x,y)); 
+                    cell.addEventListener('click', () => this.leftClickCell(x,y));
+                    cell.addEventListener('contextmenu', (ev) => {
                         ev.preventDefault();
-                        synth.setCellValue(x, y, 0);
+                        this.rightClickCell(x,y);
                         return false; // prevent context menu from appearing
                     }, false);
                 }
@@ -266,12 +318,12 @@ function HtmlInterface(document, gridSize) {
 
     // draw a connected synth's board on the HTML interface
     // should have matching grid sizes
-    this.draw = function() {
+    draw() {
 
-        if (!iface.connectedSynthInstance) {
+        if (!this.connectedSynthInstance) {
             console.log("no connected synth instance");
         } else {
-            brd = iface.connectedSynthInstance.state.brd;
+            let brd = this.connectedSynthInstance.state.brd;
             for (let x=0; x < brd.gridSize; x++) {
                 for (let y=0; y < brd.gridSize; y++) {
                     let cellElement = document.getElementById(cellId(x,y));
@@ -282,62 +334,57 @@ function HtmlInterface(document, gridSize) {
         }
     }
 
-    this.switchOn = function() {
-        // add erorr message
-        if (!iface.on) {
-            if (!iface.connectedSynthInstance) {
+    switchOn() {
+        if (!this.on) {
+            if (!this.connectedSynthInstance) {
                 console.log("no connected synth instance");
             } else {
-                iface.on = true;
-                iface.draw();
-                iface.powerLight.classList.add("on");
-                iface.gridArea.classList.add("on");
+                this.on = true;
+                this.draw();
+                this.powerLight.classList.add("on");
+                this.gridArea.classList.add("on");
             }
         }
     }
 
-    this.switchOff = function() {
-        // add error message
-        if (iface.on) {
-            if (!iface.connectedSynthInstance) {
+    switchOff() {
+        if (this.on) {
+            if (!this.connectedSynthInstance) {
                 console.log("no connected synth instance");
             } else {
-                iface.on = false;
-                iface.powerLight.classList.remove("on");
-                iface.gridArea.classList.remove("on");
-                iface.ticker.classList.remove("on");
+                this.on = false;
+                this.powerLight.classList.remove("on");
+                this.gridArea.classList.remove("on");
+                this.ticker.classList.remove("on");
             }
         }
     }
 
     // what to do when tick from clock is received
-    this.receiveTick = function() {
-        iface.ticker.classList.toggle("on");
-        iface.draw();
+    receiveTick() {
+        this.ticker.classList.toggle("on");
+        this.draw();
     }
 
     // set interface values to those stored in synth state
     // used when loading presents
-    this.setToSynthParameters = function() {
-
-        if (!iface.connectedSynthInstance) {
+    setToSynthParameters() {
+        if (!this.connectedSynthInstance) {
             console.log("no connected synth instance");
         } else {
             // board state has possibly changed, so redraw the board
-            iface.draw();
+            this.draw();
 
             // set the controls
-            state = iface.connectedSynthInstance.state;
-            iface.rootNoteControl.value = state.rootNote;
-            iface.multiplierControl.value = state.multiplierControl;
-            iface.dampingControl.value = state.damping;
-            iface.livelinessControl.value = state.liveliness;
-            iface.heatControl.value = state.heat;
-            iface.speedControl.value = 1/state.delay;
+            state = this.connectedSynthInstance.state;
+            this.rootNoteControl.value = state.rootNote;
+            this.multiplierControl.value = state.multiplierControl;
+            this.dampingControl.value = state.damping;
+            this.livelinessControl.value = state.liveliness;
+            this.heatControl.value = state.heat;
+            this.speedControl.value = 1/state.delay;
         }
-
     }
-
 }
 
 // delay: clock delay time in ms
