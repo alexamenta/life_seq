@@ -3,7 +3,7 @@ let AudioContext = window.AudioContext || window.webkitAudioContext;
 
 // presets
 presets = {
-    chatter: {
+    0: {
         damping: 10,
         delay: 80,
         heat: 0.17,
@@ -11,6 +11,62 @@ presets = {
         multiplier: 6.75,
         rootNote: 66
     },
+    1: {
+        damping: 10,
+        delay: 476,
+        heat: 0.06,
+        liveliness: 0.97,
+        multiplier: 4.25,
+        rootNote: 60
+    },
+    2: {
+        damping: 4.93,
+        delay: 73,
+        heat: 0.38,
+        liveliness: 2.64,
+        multiplier: 2.25,
+        rootNote: 93
+    },
+    3: {
+        damping: 2.56,
+        delay: 26,
+        heat: 0,
+        liveliness: 2.12,
+        multiplier: 2.5,
+        rootNote: 48
+    },
+    4: {
+        damping: 2.56,
+        delay: 137,
+        heat: 0.02,
+        liveliness: 1.74,
+        multiplier: 5.25,
+        rootNote: 46
+    },
+    5: {
+        damping: 10,
+        delay: 57,
+        heat: 0.13,
+        liveliness: 2.46,
+        multiplier: 11,
+        rootNote: 36
+    },
+    6: {
+        damping: 3,
+        delay: 125,
+        heat: 0.01,
+        liveliness: 1.2,
+        multiplier: 5,
+        rootNote: 63
+    },
+    7: {
+        damping: 10,
+        delay: 130,
+        heat: 0,
+        liveliness: 0.89,
+        multiplier: 7,
+        rootNote: 58
+    }
 }
 
 // auxiliary functions
@@ -141,9 +197,10 @@ class HtmlInterface {
         this.randomButton = document.getElementById("random");
         this.gliderButton = document.getElementById("glider");
 
-        this.presetButtons = [
-            document.getElementById("preset0")
-        ];
+        this.presetButtons = [];
+        for (let i = 0; i < 8; i++) {
+            this.presetButtons.push(document.getElementById("preset"+i));
+        }
 
         this.volumeControl = document.getElementById('volume');
         this.rootNoteControl = document.getElementById('rootNote');
@@ -243,7 +300,7 @@ class HtmlInterface {
         if (synth) {
             if (synth.on) {
                 // modify this later to allow for more presents
-                synth.loadPreset(presets.chatter);
+                synth.loadPreset(presets[n]);
             }
         }
     }
@@ -283,8 +340,10 @@ class HtmlInterface {
             this.clearButton.addEventListener('click', () => this.clickClearButton());
             this.randomButton.addEventListener('click', () => this.clickRandomButton());
             this.gliderButton.addEventListener('click', () => this.clickGliderButton());
-            // modify this to have more than one preset later
-            this.presetButtons[0].addEventListener('click', () => this.clickPresetButton(0));
+            
+            for (let i=0; i < 8; i++) {
+                this.presetButtons[i].addEventListener('click', () => this.clickPresetButton(i));
+            }
             
 
             // add event listeners for left and right click on cell
@@ -364,7 +423,7 @@ class HtmlInterface {
             // set the controls
             let state = this.connectedSynthInstance.state;
             this.rootNoteControl.value = state.rootNote;
-            this.multiplierControl.value = state.multiplierControl;
+            this.multiplierControl.value = state.multiplier;
             this.dampingControl.value = state.damping;
             this.livelinessControl.value = state.liveliness;
             this.heatControl.value = state.heat;
