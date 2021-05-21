@@ -387,46 +387,45 @@ class HtmlInterface {
     }
 }
 
-// delay: clock delay time in ms
-function Clock(delay, listeners=[]) {
-    let clock = this;
-    this.delay = delay;
-    this.listeners = listeners;
-
-    this.running = false;
-
-    this.addListener = function(listener) {
-        clock.listeners.push(listener);
+class Clock {
+    constructor(delay, listeners=[]) {
+        this.delay = delay;
+        this.listeners = listeners;    
+        this.running = false;
+    }
+    
+    addListener(listener) {
+        this.listeners.push(listener);
     }
 
     // broadcast tick message to all listeners
-    this.tick = function() {
-        for (i = 0; i < listeners.length; i++) {
-            listeners[i].receiveTick();
+    tick() {
+        for (let i = 0; i < this.listeners.length; i++) {
+            this.listeners[i].receiveTick();
         }
     }
 
     // start clock
-    this.start = async function() {
-        clock.running = true;
+    async start() {
+        this.running = true;
         while (true) {
-            clock.tick();
-            if (!clock.running) {break;}
-            await new Promise(r => setTimeout(r, clock.delay));
-            if (!clock.running) {break;}
+            this.tick();
+            if (!this.running) {break;}
+            await new Promise(r => setTimeout(r, this.delay));
+            if (!this.running) {break;}
         }
     }
 
     // stop clock
-    this.stop = function() {
-        clock.running = false;
+    stop() {
+        this.running = false;
     }
 
-    this.toggle = function() {
-        clock.running ? clock.stop() : clock.start();
+    toggle() {
+        this.running ? this.stop() : this.start();
     }
-
 }
+
 
 
 // an instance of life_syn
