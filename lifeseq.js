@@ -3,8 +3,6 @@ let AudioContext = window.AudioContext || window.webkitAudioContext;
 // options
 const GRIDSIZE = 16;
 const LIVE_COLOUR = 'rgb(200, 200, 200)'
-const VOL_RAMP_TIME = 0.005;
-const FREQ_RAMP_TIME = 0.005;
 
 // auxiliary functions
 Number.prototype.mod = function(n) {
@@ -117,34 +115,6 @@ class Board {
 }
 
 
-
-// generates oscillator and gain node matrices
-// frequencies all set to 440 by default
-// gains all set to 0 by default
-// these will be changed later in the program
-function generateOscsAndGains(gridSize, globalGainNode, audioCtx) {
-    let oscs = [];
-    let gains = [];
-    for (let x=0; x < gridSize; x++) {
-        oscs.push([]);
-        gains.push([]);
-        for (let y=0; y < gridSize; y++) {
-            let newOsc = audioCtx.createOscillator();
-            oscs[x].push(newOsc);
-
-            let newGainNode = audioCtx.createGain();
-            newGainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-            gains[x].push(newGainNode)
-            newGainNode.connect(globalGainNode);
-            newOsc.connect(newGainNode);
-            newOsc.start();
-        }
-    }
-    return [oscs, gains];
-}
-
-
-
 class HtmlInterface {
 
     constructor(document, gridSize) {
@@ -190,6 +160,10 @@ class HtmlInterface {
         }
     }
 
+    /* TODO:
+       abstract the patten appearing in the methods below
+       (somehow)
+    */
     clickPowerControl() {
         let synth = this.connectedSynthInstance;
         if (synth) {
@@ -268,13 +242,15 @@ class HtmlInterface {
         let synth = this.connectedSynthInstance;
         if (synth) {
             synth.setCellValue(x, y, 1);
+            this.draw();
         }
     }
 
     rightClickCell(x,y) {
         let synth = this.connectedSynthInstance;
         if (synth) {
-            
+            synth.setCellValue(x, y, 0);
+            this.draw();
         }
     }
 
@@ -427,99 +403,122 @@ class Clock {
 }
 
 
-
 // an instance of life_syn
-function SynthInstance(interface, gridSize) {
+class SynthInstance {
 
-    this.gridSize = gridSize;
-
-    this.state = {
-        brd: new Board(this.gridSize, 0),
-        rootNote: undefined,
-        multiplier: undefined,
-        damping: undefined,
-        liveliness: undefined,
-        heat: undefined,
-        delay: undefined
-        }
-
-    this.interface = interface;
-    this.interface.connectSynthInstance(this);
-
-    this.clock = undefined; 
-
-    // use when there are scope issues
-    let synth = this;
-    let state = this.state;
-    let iface = this.interface;
-
-    this.audioCtx = undefined;
-
-    // keeps track of whether the audio context is being accessed
-    // when this is true, don't allow power to be switched off
-    // until it becomes false
-    this.accessingAudio = false;
-    this._freeAudio = function(fnc) {
-        synth.accessingAudio = true;
-        fnc();
-        synth.accessingAudio = false;
+    constructor(iface, gridSize) {
+        this.gridSize = gridSize;
+        this.iface = iface;
+        this.iface.connectSynthInstance(this);
+        this.clock = undefined;
+        this.audioCtx = undefined;
+        this.state = {
+            brd: new Board(this.gridSize, 0),
+            rootNote: undefined,
+            multiplier: undefined,
+            damping: undefined,
+            liveliness: undefined,
+            heat: undefined,
+            delay: undefined
+            }
+        this.accessingAudio = false;
+        this.gainNode = undefined;
+        this.oscs = undefined;
+        this.gains = undefined;
+        this.on = false;
+        this.running = false;
+        this.paused = false;
     }
 
-    this.gainNode = undefined;
-    this.oscs = undefined;
-    this.gains = undefined;
-    this.on = false;
-    this.running = false;
-    this.paused = false;
+    /* SynthInstance.accessingAudio keeps track of whether the audio context 
+       is being accessed. If it is, don't allow power to be switched off.
+       This prevents some errors that pop up when the power is turned off
+       during a clock cycle.
+       When a method needs access to the audio context, wrap it in freeAudio!
+    */
+    freeAudio(fnc) {
+        this.accessingAudio = true;
+        fnc();
+        this.accessingAudio = false;
+    }
 
-    this.setCellValue = function(x, y, value) {
+    // called by the interface
+    setCellValue(x, y, value) {
         if (!synth.on) {
-            console.log("Synth is switched off");
+            console.log("Cannot set cell value while synth power is off");
         } else {
-            synth.state.brd.cells[x][y] = value;
-            iface.draw();
+            this.state.brd.cells[x][y] = value;
+        }
+    }
+
+
+    // generates oscillator and gain node matrices
+    // frequencies all set to 440 by default
+    // gains all set to 0 by default
+    // these will be changed as the synth runs
+    generateOscsAndGains() {
+        if (!this.audioCtx || !this.gainNode) {
+            console.log("Audio context and/or gain node not found")
+        } else {
+            // first reset oscs and gains to empty state
+            this.oscs = [];
+            this.gains = [];
+
+            for (let x=0; x < this.gridSize; x++) {
+                this.oscs.push([]);
+                this.gains.push([]);
+                for (let y=0; y < this.gridSize; y++) {
+                    let newOsc = this.audioCtx.createOscillator();
+                    this.oscs[x].push(newOsc);
+    
+                    let newGainNode = this.audioCtx.createGain();
+                    newGainNode.gain.setValueAtTime(0, this.audioCtx.currentTime);
+                    this.gains[x].push(newGainNode)
+                    newGainNode.connect(this.gainNode);
+                    newOsc.connect(newGainNode);
+                    newOsc.start();
+                }
+            }
         }
     }
 
     // generate matrix of frequencies
-    // this is just an ad-hoc definition, can be changed
-    this._generateFreqMatrix = function() {
+    // this contains the logic dictating how cells correspond to frequencies
+    // it would be a good idea to define that as a separate function
+    generateFreqMatrix() {
         let freqs = [];
-        for (x = 0; x < synth.gridSize; x++) {
+        for (let x = 0; x < this.gridSize; x++) {
             freqs.push([]);
-            for (y = 0; y < synth.gridSize; y++) {
-                // truncate at max frequency allowed, 22050
-                freqs[x].push(Math.min(noteToFreq(synth.state.rootNote)*freqMultiplier(x, y, synth.gridSize, synth.state.multiplier), 22050));
+            for (let y = 0; y < this.gridSize; y++) {
+                // webaudio API only allows frequencies below 22050
+                // so truncate to avoid errors
+                let computed_freq = noteToFreq(this.state.rootNote)*freqMultiplier(x, y, this.gridSize, this.state.multiplier);
+                freqs[x].push(Math.min(computed_freq, 22050));
             }
         }
         return freqs;
     }
 
-    // given doubly-indexed arrays of oscillators and frequencies (of the same shape)
-    // ramp the frequencies to the new values
-    this._setAllFrequencies = function(freqs) {
-        // how could this pattern be abstracted?
-        synth._freeAudio(
-            function() {
-                for (x = 0; x < synth.gridSize; x++) {
-                    for (y = 0; y < synth.gridSize; y++) {
-                        // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
-                        synth.oscs[x][y].frequency.setValueAtTime(synth.oscs[x][y].frequency.value, synth.audioCtx.currentTime)
-                        synth.oscs[x][y].frequency.exponentialRampToValueAtTime(freqs[x][y], synth.audioCtx.currentTime + FREQ_RAMP_TIME);
-                    }
-                }
+    // given frequency matrix (output of SynthInstance.generateFreqMatrix)
+    // ramp the current frequencies (in SynthInstance.oscs) to the new values
+    setFrequencies(freqs) {
+        for (let x = 0; x < this.gridSize; x++) {
+            for (let y = 0; y < this.gridSize; y++) {
+                // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
+                this.oscs[x][y].frequency.setValueAtTime(this.oscs[x][y].frequency.value, this.audioCtx.currentTime)
+                this.oscs[x][y].frequency.exponentialRampToValueAtTime(freqs[x][y], this.audioCtx.currentTime + 0.005);
             }
-        );
+        }
     }
 
-    this._readyToPlay = function() {
-        if (!synth.audioCtx) {
+    readyToPlay() {
+        if (!this.audioCtx) {
             console.log("audio context not found");
             return false;
-        } else if (!synth.gainNode) {
+        } else if (!this.gainNode) {
             console.log("gain node not found");
             return false;
-        } else if (!synth.on) {
+        } else if (!this.on) {
             console.log("synth is not turned on");
             return false;
         } else {
@@ -527,34 +526,34 @@ function SynthInstance(interface, gridSize) {
         }
     }
     
-    this.switchOn = function() {
+    switchOn() {
         if (!this.on) {
             this.on = true;
-            iface.switchOn();
+            this.iface.switchOn();
             this.initialiseAudio();
             this.getParameters();
             // initialise clock
-            synth.clock = new Clock(state.delay);
-            synth.clock.addListener(synth);
-            synth.clock.addListener(iface);
+            this.clock = new Clock(this.state.delay);
+            this.clock.addListener(this);
+            this.clock.addListener(this.iface);
         } else {
             console.log("Synth is already on");
         }
     }
 
-    this.switchOff = function() {
+    switchOff() {
         if (this.on) {
             
-            synth.stop();
+            this.stop();
 
-            while (synth.accessingAudio) {
+            while (this.accessingAudio) {
             // wait until audio context isn't being accessed before switching it off
             }
 
-            this.audioCtx.close().then(function() {
-                synth.audioCtx = undefined;
-                synth.on = false;
-                iface.switchOff();
+            this.audioCtx.close().then(() => {
+                this.audioCtx = undefined;
+                this.on = false;
+                this.iface.switchOff();
             })
 
         } else {
@@ -562,120 +561,119 @@ function SynthInstance(interface, gridSize) {
         }
     }
 
-    this.pause = function () {
-        if (!synth.paused) {
-            synth.paused = true;
-            if (synth.clock) {synth.clock.stop();}
+    pause() {
+        if (!this.paused) {
+            this.paused = true;
+            if (this.clock) {this.clock.stop();}
         }
     }
 
-    this.initialiseAudio = function() {
+    initialiseAudio() {
         // initialise audio context
-        let audioCtx = new AudioContext();
+        this.audioCtx = new AudioContext();
 
-        synth._freeAudio(
-            function() {
+        this.freeAudio(
+            () => {
                 // global gain node, to adjust volume
-                let gainNode = audioCtx.createGain();
-                gainNode.gain.value = synth.interface.volumeControl.value;
-                synth.interface.volumeControl.addEventListener('input', function() {
-                    gainNode.gain.value = this.value;
-                }, false);
-                gainNode.connect(audioCtx.destination);
+                this.gainNode = this.audioCtx.createGain();
+                this.gainNode.gain.value = this.iface.volumeControl.value;
+                this.iface.volumeControl.addEventListener('input', 
+                    () => {
+                        this.gainNode.gain.value = this.iface.volumeControl.value;
+                    }, false);
+                this.gainNode.connect(this.audioCtx.destination);
 
-                synth.audioCtx = audioCtx;
-                synth.gainNode = gainNode;
-
-                // set up oscillators and corresponding gains
-                let oscsAndGains = generateOscsAndGains(synth.gridSize, gainNode, audioCtx)
-                synth.oscs = oscsAndGains[0];
-                synth.gains = oscsAndGains[1];
+                this.generateOscsAndGains()                
             }
         )
     }
 
-    this.getParameters = function() {
-        if (synth.audioCtx) {
-            synth.gainNode.gain.setValueAtTime(synth.gainNode.gain.value, synth.audioCtx.currentTime);
-            synth.gainNode.gain.linearRampToValueAtTime(iface.volumeControl.value/1, synth.audioCtx.currentTime + VOL_RAMP_TIME);
+    getParameters() {
+        // do nothing and return no error if audio context is undefined
+        // if an error were to be returned, we'd always get error messages when the power is switched off
+        // even with the freeAudio functionality (which isn't really good enough tbh)
+        if (this.audioCtx) {
+            this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.audioCtx.currentTime);
+            this.gainNode.gain.linearRampToValueAtTime(this.iface.volumeControl.value/1, this.audioCtx.currentTime + 0.005);
     
             // get initial parameters
-            state.rootNote = iface.rootNoteControl.value/1;
-            state.multiplier = iface.multiplierControl.value/1;
-            state.liveliness = iface.livelinessControl.value/1;
-            state.damping = iface.dampingControl.value/1;
-            state.heat = iface.heatControl.value/1;
-            state.delay = 1/iface.speedControl.value;
+            this.state.rootNote = this.iface.rootNoteControl.value/1;
+            this.state.multiplier = this.iface.multiplierControl.value/1;
+            this.state.liveliness = this.iface.livelinessControl.value/1;
+            this.state.damping = this.iface.dampingControl.value/1;
+            this.state.heat = this.iface.heatControl.value/1;
+            this.state.delay = 1/this.iface.speedControl.value;
     
-            // form frequency matrix
-            freqs = synth._generateFreqMatrix();
-            // set oscillator initial frequencies
-            synth._setAllFrequencies(freqs);
+            // generate and set frequencies
+            this.freeAudio(
+                () => this.setFrequencies(this.generateFreqMatrix())
+            );
         }
     }
 
-    this.receiveTick = function() {
+    receiveTick() {
         // update and play board
         // interface handles the drawing
-        synth.state.brd.step(soft_conway(state.liveliness, state.heat));
-        synth.getParameters();
-        synth.clock.delay = state.delay;
-        synth.play();
+        this.state.brd.step(soft_conway(this.state.liveliness, this.state.heat));
+        this.getParameters();
+        this.clock.delay = this.state.delay;
+        this.play();
     }
 
-    // play the current board
-    this.play = function() {
-
-        if (synth._readyToPlay()) {
-
-            for (let x = 0; x < synth.gridSize; x++) {
-                for (let y = 0; y < synth.gridSize; y++) {
-                    synth._freeAudio(function() 
-                    {
-                        let new_vol = dampCurve(x, y, synth.gridSize, synth.state.damping)*synth.state.brd.cells[x][y];
-                        // have to 'set the value to the current value' to prevent clicks
-                        // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
-                        synth.gains[x][y].gain.setValueAtTime(synth.gains[x][y].gain.value, synth.audioCtx.currentTime);
-                        synth.gains[x][y].gain.linearRampToValueAtTime(new_vol, synth.audioCtx.currentTime + VOL_RAMP_TIME);
-                    });
+    // play the current board (audio)
+    play() {
+        if (this.readyToPlay()) {
+            for (let x = 0; x < this.gridSize; x++) {
+                for (let y = 0; y < this.gridSize; y++) {
+                    this.freeAudio(
+                        () =>  {
+                            let new_vol = dampCurve(x, y, this.gridSize, this.state.damping)*this.state.brd.cells[x][y];
+                            // see https://stackoverflow.com/questions/34476178/web-audio-click-sound-even-when-using-exponentialramptovalueattime
+                            this.gains[x][y].gain.setValueAtTime(this.gains[x][y].gain.value, this.audioCtx.currentTime);
+                            this.gains[x][y].gain.linearRampToValueAtTime(new_vol, this.audioCtx.currentTime + 0.005);
+                        }
+                    );
                 }   
             }
         }
     }
 
-    // run the synth!
-    this.run = function() {
-        synth.paused = false;
-        if (synth.on) {
-            synth.running = true;
-            if (!synth.clock.running) {
-                synth.clock.start();
+    // run the synth (actually just turn on the clock)
+    run() {
+        this.paused = false;
+        if (this.on) {
+            this.running = true;
+            if (!this.clock.running) {
+                this.clock.start();
             }
         }
     }
 
-    this.stop = function() {
-        synth.paused = false;
-        if (synth.running) {
-            synth.running = false;
-            synth.clock.stop();
-            synth.gainNode.gain.setValueAtTime(synth.gainNode.gain.value, synth.audioCtx.currentTime);
-            synth.gainNode.gain.linearRampToValueAtTime(0, synth.audioCtx.currentTime + VOL_RAMP_TIME);
+    stop() {
+        this.paused = false;
+        if (this.running) {
+            this.running = false;
+            this.clock.stop();
+            this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.audioCtx.currentTime);
+            this.gainNode.gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + 0.005);
         }
     }
 
-    this.loadPreset = function(preset) {
-        // copy over properties from preset
-        synth.state = Object.assign(synth.state, preset);
-        interface.setToSynthParameters(); 
+    loadPreset(preset) {
+        /* copy over properties from preset
+           using Object.assign takes the properties of preset
+           without erasing non-present properties
+        */
+        this.state = Object.assign(this.state, preset);
+        this.iface.setToSynthParameters(); 
     }
 
-    this.randomiseCells = function(p=0.5) {
-        synth.state.brd.cells = randomCells(synth.gridSize, p);
+    randomiseCells(p=0.5) {
+        this.state.brd.cells = randomCells(this.gridSize, p);
     }
 
-    this.resetToGlider = function() {
-        synth.state.brd.cells = gliderCells(synth.gridSize);
+    resetToGlider() {
+        this.state.brd.cells = gliderCells(this.gridSize);
     }
 }
 
