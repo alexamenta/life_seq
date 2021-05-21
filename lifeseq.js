@@ -376,7 +376,7 @@ class HtmlInterface {
             this.draw();
 
             // set the controls
-            state = this.connectedSynthInstance.state;
+            let state = this.connectedSynthInstance.state;
             this.rootNoteControl.value = state.rootNote;
             this.multiplierControl.value = state.multiplierControl;
             this.dampingControl.value = state.damping;
