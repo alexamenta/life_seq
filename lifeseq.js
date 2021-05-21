@@ -66,6 +66,14 @@ presets = {
         liveliness: 0.89,
         multiplier: 7,
         rootNote: 58
+    },
+    8: {
+        damping: 7.79,
+        delay: 59,
+        heat: 0.37,
+        liveliness: 2.56,
+        multiplier: 4.75,
+        rootNote: 60
     }
 }
 
@@ -183,7 +191,6 @@ class Board {
 class HtmlInterface {
 
     constructor(document, gridSize) {
-        this.liveColour = 'rgb(200, 200, 200)'
         this.on = false;
         this.document = document;
         this.gridSize = gridSize;
@@ -198,7 +205,7 @@ class HtmlInterface {
         this.gliderButton = document.getElementById("glider");
 
         this.presetButtons = [];
-        for (let i = 0; i < 8; i++) {
+        for (let i = 0; i < 9; i++) {
             this.presetButtons.push(document.getElementById("preset"+i));
         }
 
@@ -341,7 +348,7 @@ class HtmlInterface {
             this.randomButton.addEventListener('click', () => this.clickRandomButton());
             this.gliderButton.addEventListener('click', () => this.clickGliderButton());
             
-            for (let i=0; i < 8; i++) {
+            for (let i=0; i < 9; i++) {
                 this.presetButtons[i].addEventListener('click', () => this.clickPresetButton(i));
             }
             
@@ -372,7 +379,6 @@ class HtmlInterface {
             for (let x=0; x < brd.gridSize; x++) {
                 for (let y=0; y < brd.gridSize; y++) {
                     let cellElement = document.getElementById(cellId(x,y));
-                    cellElement.style.backgroundColor = this.liveColour;
                     cellElement.style.opacity = brd.cells[x][y];
                 }
             }
