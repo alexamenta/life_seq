@@ -1,8 +1,17 @@
+// apparently this enables some legacy support?
 let AudioContext = window.AudioContext || window.webkitAudioContext;
 
-// options
-const GRIDSIZE = 16;
-const LIVE_COLOUR = 'rgb(200, 200, 200)'
+// presets
+presets = {
+    chatter: {
+        damping: 10,
+        delay: 80,
+        heat: 0.17,
+        liveliness: 2.87,
+        multiplier: 6.75,
+        rootNote: 66
+    },
+}
 
 // auxiliary functions
 Number.prototype.mod = function(n) {
@@ -118,6 +127,7 @@ class Board {
 class HtmlInterface {
 
     constructor(document, gridSize) {
+        this.liveColour = 'rgb(200, 200, 200)'
         this.on = false;
         this.document = document;
         this.gridSize = gridSize;
@@ -303,7 +313,7 @@ class HtmlInterface {
             for (let x=0; x < brd.gridSize; x++) {
                 for (let y=0; y < brd.gridSize; y++) {
                     let cellElement = document.getElementById(cellId(x,y));
-                    cellElement.style.backgroundColor = LIVE_COLOUR;
+                    cellElement.style.backgroundColor = this.liveColour;
                     cellElement.style.opacity = brd.cells[x][y];
                 }
             }
@@ -679,18 +689,9 @@ class SynthInstance {
 
 
 
-presets = {
-    chatter: {
-        damping: 10,
-        delay: 80,
-        heat: 0.17,
-        liveliness: 2.87,
-        multiplier: 6.75,
-        rootNote: 66
-    },
-}
 
 
+let GRIDSIZE = 16;
 
 iface = new HtmlInterface(document, GRIDSIZE);
 synth = new SynthInstance(iface, GRIDSIZE);
