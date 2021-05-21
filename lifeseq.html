@@ -8,15 +8,18 @@
             body {
                 font-family: 'Cousine', monospace;;
                 background: #FEFDD0;
-                color: #DDDDDD;
+                color: #4a458f;
                 font-size: 8px;
             }
             .mainbox {
-                background: #181828;
+                background: #c7c2bd;
                 display: grid;
                 grid-template-columns: 130px 236px 135px;
                 grid-template-rows: auto;
-                box-shadow: 6px 6px 0px 0px #080808;
+                box-shadow: 0px 8px 0px 0px #222222;
+                border: 1px;
+                border-color: #222222;
+                border-style: solid;
                 position: fixed;
                 top: 50%;
                 left: 50%;
@@ -96,12 +99,12 @@
                 opacity: 1;
             }
             button {
-                background-color: #333;
+                background-color: #817a7e;
                 font-family: 'Cousine', monospace;;
                 font-size: 10px;
-                color: #DDDDDD;
+                color: #000;
                 border-width: 1px;
-                border-color: #111111;
+                border-color: #575255;
                 box-shadow: 0px 4px 0px 0px #020202;
                 width: 40px;
                 height: 20px;
@@ -109,7 +112,7 @@
 
             }
             button.toggled {
-                box-shadow: 0px 1px 0px 0px #020202;
+                box-shadow: 0px 2px 0px 0px #020202;
                 position: relative;
                 top: 2px;
             }
@@ -145,35 +148,35 @@
             /* Special styling for WebKit/Blink */
             input[type=range]::-webkit-slider-thumb {
                 -webkit-appearance: none;
-                border: 1px solid #000000;
-                height: 9px;
-                width: 4px;
-                border-radius: 0px;
-                background: #ffffff;
+                /* border: 1px solid #000000; */
+                height: 12px;
+                width: 8px;
+                border-radius: 2px;
+                background: #a52d5f;
                 cursor: pointer;
-                margin-top: 0px; /* You need to specify a margin in Chrome, but in Firefox and IE it is automatic */
-                box-shadow: 0px 0px 0px #000000, 0px 0px 0px #0d0d0d; /* Add cool effects to your sliders! */
+                margin-top: -2px; /* You need to specify a margin in Chrome, but in Firefox and IE it is automatic */
+                box-shadow: 0px 2px 0px #772145, 0px 0px 0px #0d0d0d; /* Add cool effects to your sliders! */
             }
 
             /* All the same stuff for Firefox */
             input[type=range]::-moz-range-thumb {
                 box-shadow: 1px 1px 1px #000000, 0px 0px 1px #0d0d0d;
-                border: 1px solid #000000;
-                height: 9px;
-                width: 4px;
-                border-radius: 0px;
-                background: #ffffff;
+                /* border: 1px solid #000000; */
+                height: 12px;
+                width: 8px;
+                border-radius: 2px;
+                background: #a52d5f;
                 cursor: pointer;
             }
 
             /* All the same stuff for IE */
             input[type=range]::-ms-thumb {
                 box-shadow: 1px 1px 1px #000000, 0px 0px 1px #0d0d0d;
-                border: 1px solid #000000;
-                height: 9px;
-                width: 4px;
-                border-radius: 0px;
-                background: #ffffff;
+                /* border: 1px solid #000000; */
+                height: 12px;
+                width: 8px;
+                border-radius: 2px;
+                background: #a52d5f;
                 cursor: pointer;
             }
 
@@ -182,18 +185,18 @@
                 width: 100%;
                 height: 9px;
                 cursor: pointer;
-                background: #333333;
+                background: #333;
             }
 
             input[type=range]:focus::-webkit-slider-runnable-track {
-                background: #333333;
+                background: #333;
             }
 
             input[type=range]::-moz-range-track {
                 width: 100%;
                 height: 9px;
                 cursor: pointer;
-                background: #333333;
+                background: #333;
             }
 
             input[type=range]::-ms-track {
